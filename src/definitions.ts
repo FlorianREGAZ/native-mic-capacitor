@@ -1,3 +1,5 @@
+import type { PluginListenerHandle } from '@capacitor/core';
+
 export type MicPermissionState = 'prompt' | 'granted' | 'denied';
 export type MicProfile = 'waveform' | 'pipecat';
 export type SessionMode = 'measurement' | 'voice_chat';
@@ -105,4 +107,30 @@ export interface NativeMicPlugin {
   setMicEnabled(options: { captureId: string; enabled: boolean }): Promise<void>;
   getState(): Promise<{ state: 'idle' | 'running' | 'paused' }>;
   getDiagnostics(): Promise<Record<string, unknown>>;
+
+  addListener(
+    eventName: 'micStateChanged',
+    listenerFunc: (event: MicStateChangedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'micPcmChunk',
+    listenerFunc: (event: MicPcmChunkEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'micAudioLevel',
+    listenerFunc: (event: MicAudioLevelEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'micRouteChanged',
+    listenerFunc: (event: MicRouteChangedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'micInterruption',
+    listenerFunc: (event: MicInterruptionEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'micError',
+    listenerFunc: (event: MicErrorEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  removeAllListeners(): Promise<void>;
 }

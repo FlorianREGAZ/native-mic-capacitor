@@ -24,6 +24,13 @@ npx cap sync
 * [`setMicEnabled(...)`](#setmicenabled)
 * [`getState()`](#getstate)
 * [`getDiagnostics()`](#getdiagnostics)
+* [`addListener('micStateChanged', ...)`](#addlistenermicstatechanged-)
+* [`addListener('micPcmChunk', ...)`](#addlistenermicpcmchunk-)
+* [`addListener('micAudioLevel', ...)`](#addlistenermicaudiolevel-)
+* [`addListener('micRouteChanged', ...)`](#addlistenermicroutechanged-)
+* [`addListener('micInterruption', ...)`](#addlistenermicinterruption-)
+* [`addListener('micError', ...)`](#addlistenermicerror-)
+* [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 
@@ -167,6 +174,111 @@ getDiagnostics() => Promise<Record<string, unknown>>
 --------------------
 
 
+### addListener('micStateChanged', ...)
+
+```typescript
+addListener(eventName: 'micStateChanged', listenerFunc: (event: MicStateChangedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'micStateChanged'</code>                                                            |
+| **`listenerFunc`** | <code>(event: <a href="#micstatechangedevent">MicStateChangedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('micPcmChunk', ...)
+
+```typescript
+addListener(eventName: 'micPcmChunk', listenerFunc: (event: MicPcmChunkEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                              |
+| ------------------ | --------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'micPcmChunk'</code>                                                        |
+| **`listenerFunc`** | <code>(event: <a href="#micpcmchunkevent">MicPcmChunkEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('micAudioLevel', ...)
+
+```typescript
+addListener(eventName: 'micAudioLevel', listenerFunc: (event: MicAudioLevelEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'micAudioLevel'</code>                                                          |
+| **`listenerFunc`** | <code>(event: <a href="#micaudiolevelevent">MicAudioLevelEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('micRouteChanged', ...)
+
+```typescript
+addListener(eventName: 'micRouteChanged', listenerFunc: (event: MicRouteChangedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'micRouteChanged'</code>                                                            |
+| **`listenerFunc`** | <code>(event: <a href="#microutechangedevent">MicRouteChangedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('micInterruption', ...)
+
+```typescript
+addListener(eventName: 'micInterruption', listenerFunc: (event: MicInterruptionEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'micInterruption'</code>                                                            |
+| **`listenerFunc`** | <code>(event: <a href="#micinterruptionevent">MicInterruptionEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('micError', ...)
+
+```typescript
+addListener(eventName: 'micError', listenerFunc: (event: MicErrorEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                        |
+| ------------------ | --------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'micError'</code>                                                     |
+| **`listenerFunc`** | <code>(event: <a href="#micerrorevent">MicErrorEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### removeAllListeners()
+
+```typescript
+removeAllListeners() => Promise<void>
+```
+
+--------------------
+
+
 ### Interfaces
 
 
@@ -222,6 +334,79 @@ getDiagnostics() => Promise<Record<string, unknown>>
 | -------------------- | ------------------- |
 | **`captureId`**      | <code>string</code> |
 | **`flushTimeoutMs`** | <code>number</code> |
+
+
+#### PluginListenerHandle
+
+| Prop         | Type                                      |
+| ------------ | ----------------------------------------- |
+| **`remove`** | <code>() =&gt; Promise&lt;void&gt;</code> |
+
+
+#### MicStateChangedEvent
+
+| Prop            | Type                                         |
+| --------------- | -------------------------------------------- |
+| **`captureId`** | <code>string</code>                          |
+| **`state`**     | <code>'idle' \| 'running' \| 'paused'</code> |
+| **`reason`**    | <code>string</code>                          |
+
+
+#### MicPcmChunkEvent
+
+| Prop             | Type                                                  |
+| ---------------- | ----------------------------------------------------- |
+| **`captureId`**  | <code>string</code>                                   |
+| **`stream`**     | <code><a href="#outputstream">OutputStream</a></code> |
+| **`sampleRate`** | <code>16000 \| 48000</code>                           |
+| **`channels`**   | <code>1</code>                                        |
+| **`frames`**     | <code>number</code>                                   |
+| **`seq`**        | <code>number</code>                                   |
+| **`ptsMs`**      | <code>number</code>                                   |
+| **`dataBase64`** | <code>string</code>                                   |
+| **`final`**      | <code>boolean</code>                                  |
+
+
+#### MicAudioLevelEvent
+
+| Prop            | Type                 |
+| --------------- | -------------------- |
+| **`captureId`** | <code>string</code>  |
+| **`rms`**       | <code>number</code>  |
+| **`peak`**      | <code>number</code>  |
+| **`dbfs`**      | <code>number</code>  |
+| **`vad`**       | <code>boolean</code> |
+| **`ptsMs`**     | <code>number</code>  |
+
+
+#### MicRouteChangedEvent
+
+| Prop                  | Type                |
+| --------------------- | ------------------- |
+| **`captureId`**       | <code>string</code> |
+| **`reason`**          | <code>string</code> |
+| **`selectedInputId`** | <code>string</code> |
+
+
+#### MicInterruptionEvent
+
+| Prop               | Type                            |
+| ------------------ | ------------------------------- |
+| **`captureId`**    | <code>string</code>             |
+| **`phase`**        | <code>'began' \| 'ended'</code> |
+| **`shouldResume`** | <code>boolean</code>            |
+| **`reason`**       | <code>string</code>             |
+
+
+#### MicErrorEvent
+
+| Prop              | Type                 |
+| ----------------- | -------------------- |
+| **`captureId`**   | <code>string</code>  |
+| **`code`**        | <code>string</code>  |
+| **`message`**     | <code>string</code>  |
+| **`recoverable`** | <code>boolean</code> |
+| **`nativeCode`**  | <code>string</code>  |
 
 
 ### Type Aliases
