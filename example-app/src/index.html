@@ -1,26 +1,1208 @@
 <!doctype html>
-<html lang="en" dir="ltr" class="hydrated">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <title>Example Capacitor App</title>
+    <title>Native Mic API Lab</title>
     <meta
       name="viewport"
       content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <meta name="format-detection" content="telephone=no" />
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+      :root {
+        --paper: #f2ede4;
+        --ink: #1d232c;
+        --muted: #5f6b79;
+        --panel: rgba(255, 255, 255, 0.76);
+        --line: rgba(29, 35, 44, 0.12);
+        --accent-a: #01658f;
+        --accent-b: #b14528;
+        --accent-c: #1f4f38;
+        --ok: #1f7a57;
+        --warn: #b06a00;
+        --error: #b02a2a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 88% 12%, rgba(177, 69, 40, 0.22) 0, transparent 30%),
+          radial-gradient(circle at 10% 85%, rgba(1, 101, 143, 0.2) 0, transparent 34%),
+          linear-gradient(165deg, #f4f0e7 0%, #ebe5d9 46%, #e7e2d8 100%);
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+        background-size: 22px 22px;
+        opacity: 0.36;
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(1400px, 100% - 2rem);
+        margin: 1rem auto 2rem;
+      }
+
+      .hero {
+        padding: 1.2rem 1.4rem;
+        border: 1px solid var(--line);
+        background: linear-gradient(100deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.48));
+        backdrop-filter: blur(8px);
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-family: 'Bricolage Grotesque', 'Avenir Next', 'Trebuchet MS', sans-serif;
+        font-weight: 800;
+        font-size: clamp(1.5rem, 1.3rem + 1vw, 2.4rem);
+        letter-spacing: 0.01em;
+        line-height: 1.05;
+      }
+
+      .hero p {
+        margin: 0.8rem 0 0;
+        color: var(--muted);
+        max-width: 70ch;
+      }
+
+      .layout {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: 1.15fr 0.85fr;
+        margin-top: 1rem;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(7px);
+        padding: 1rem;
+      }
+
+      .section {
+        margin-bottom: 1.2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px dashed rgba(29, 35, 44, 0.2);
+      }
+
+      .section:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .section h2 {
+        margin: 0 0 0.75rem;
+        font-family: 'Bricolage Grotesque', 'Avenir Next', sans-serif;
+        font-size: 1.08rem;
+        letter-spacing: 0.02em;
+      }
+
+      .grid {
+        display: grid;
+        gap: 0.65rem;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .field {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .field label {
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .field input,
+      .field select,
+      .field textarea {
+        border: 1px solid rgba(29, 35, 44, 0.28);
+        background: rgba(255, 255, 255, 0.75);
+        padding: 0.56rem 0.6rem;
+        color: var(--ink);
+        border-radius: 0;
+        font: inherit;
+      }
+
+      .field textarea {
+        min-height: 84px;
+      }
+
+      .check-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      .check {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.45rem;
+        border: 1px solid rgba(29, 35, 44, 0.14);
+        background: rgba(255, 255, 255, 0.6);
+      }
+
+      .buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      button {
+        border: 1px solid rgba(29, 35, 44, 0.34);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--ink);
+        font: inherit;
+        padding: 0.52rem 0.78rem;
+        text-transform: uppercase;
+        font-size: 0.74rem;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+        transition:
+          transform 130ms ease,
+          background-color 130ms ease,
+          box-shadow 130ms ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 3px 3px 0 rgba(29, 35, 44, 0.14);
+      }
+
+      button.primary {
+        border-color: var(--accent-a);
+        background: linear-gradient(90deg, var(--accent-a), #2088aa);
+        color: #f2f8fb;
+      }
+
+      button.warn {
+        border-color: var(--accent-b);
+        background: linear-gradient(90deg, var(--accent-b), #c26f55);
+        color: #fff4ef;
+      }
+
+      button.good {
+        border-color: var(--accent-c);
+        background: linear-gradient(90deg, var(--accent-c), #2d6a4f);
+        color: #eefcf5;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border: 1px solid var(--line);
+        padding: 0.34rem 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-size: 0.72rem;
+        background: rgba(255, 255, 255, 0.74);
+      }
+
+      .chip::before {
+        content: '';
+        width: 0.56rem;
+        height: 0.56rem;
+        border-radius: 50%;
+        background: #7b8794;
+      }
+
+      .chip[data-state='running']::before {
+        background: var(--ok);
+      }
+
+      .chip[data-state='paused']::before {
+        background: var(--warn);
+      }
+
+      .chip[data-state='idle']::before {
+        background: #7b8794;
+      }
+
+      .chip[data-state='error']::before {
+        background: var(--error);
+      }
+
+      .result-box,
+      .diagnostics,
+      .logs {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .result-box pre,
+      .diagnostics pre {
+        margin: 0;
+        padding: 0.7rem;
+        max-height: 170px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+
+      .monitor-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.8rem;
+        margin-bottom: 0.8rem;
+      }
+
+      .stream-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.8rem;
+      }
+
+      .stream-card {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        padding: 0.75rem;
+      }
+
+      .stream-card h3 {
+        margin: 0 0 0.55rem;
+        font-family: 'Bricolage Grotesque', 'Avenir Next', sans-serif;
+        font-size: 0.98rem;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.2rem 0.5rem;
+        font-size: 0.78rem;
+      }
+
+      .kv span:nth-child(odd) {
+        color: var(--muted);
+      }
+
+      .meter-group {
+        margin-top: 0.85rem;
+      }
+
+      .meter-row {
+        display: grid;
+        grid-template-columns: 52px 1fr 76px;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.45rem;
+      }
+
+      .meter-shell {
+        height: 10px;
+        border: 1px solid rgba(29, 35, 44, 0.24);
+        background: rgba(255, 255, 255, 0.8);
+        position: relative;
+      }
+
+      .meter-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0;
+        background: linear-gradient(90deg, #0f6d95, #34a4be);
+      }
+
+      .meter-fill.peak {
+        background: linear-gradient(90deg, #8f4b2e, #ca6b3d);
+      }
+
+      #levelCanvas {
+        width: 100%;
+        height: 86px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        display: block;
+      }
+
+      .logs {
+        margin-top: 0.8rem;
+        max-height: 320px;
+        overflow: auto;
+      }
+
+      .log-entry {
+        border-bottom: 1px dashed rgba(29, 35, 44, 0.14);
+        padding: 0.55rem 0.65rem;
+      }
+
+      .log-entry:last-child {
+        border-bottom: 0;
+      }
+
+      .log-head {
+        display: flex;
+        gap: 0.45rem;
+        align-items: center;
+        margin-bottom: 0.32rem;
+        font-size: 0.74rem;
+      }
+
+      .dot {
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .dot.ok {
+        background: var(--ok);
+      }
+
+      .dot.event {
+        background: var(--accent-a);
+      }
+
+      .dot.error {
+        background: var(--error);
+      }
+
+      .log-head time {
+        color: var(--muted);
+      }
+
+      .log-entry pre {
+        margin: 0;
+        white-space: pre-wrap;
+      }
+
+      .tiny {
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+
+      @media (max-width: 1100px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .grid.two,
+        .grid.three,
+        .stream-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .shell {
+          width: min(1400px, 100% - 1rem);
+        }
+      }
+    </style>
   </head>
   <body>
-    <main>
-      <h1>Capacitor Test Plugin Project</h1>
-      <p>
-        This project can be used to test out the functionality of your plugin. Nothing in the
-        <em>example-app/</em> folder will be published to npm when using this template, so you can create away!
-      </p>
-      <label for="echoInput">Echo Text:</label>
-      <input type="text" id="echoInput" name="echoInput" value="Hello World!" />
-      <button onclick="testEcho()">Click Me!</button>
+    <main class="shell">
+      <header class="hero">
+        <h1>Native Mic API Lab</h1>
+        <p>
+          Live test surface for the Capacitor NativeMic plugin. Use this page to run every API call,
+          inspect event flow, and validate chunk/sequence behavior while capturing.
+        </p>
+      </header>
+
+      <section class="layout">
+        <article class="panel">
+          <section class="section">
+            <h2>Lifecycle & Permissions</h2>
+            <div class="buttons">
+              <button id="btnIsAvailable">isAvailable</button>
+              <button id="btnCheckPermissions">checkPermissions</button>
+              <button id="btnRequestPermissions" class="primary">requestPermissions</button>
+              <button id="btnGetState">getState</button>
+              <button id="btnGetDiagnostics">getDiagnostics</button>
+            </div>
+            <div class="result-box" style="margin-top: 0.7rem">
+              <pre id="methodResult">Ready.</pre>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Devices & Routing</h2>
+            <div class="grid two">
+              <div class="field">
+                <label for="preferredInputSelect">Preferred input</label>
+                <select id="preferredInputSelect">
+                  <option value="">(system default)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="routeSelect">Output route</label>
+                <select id="routeSelect">
+                  <option value="system">system</option>
+                  <option value="speaker">speaker</option>
+                  <option value="receiver">receiver</option>
+                </select>
+              </div>
+            </div>
+            <div class="buttons" style="margin-top: 0.65rem">
+              <button id="btnGetDevices">getDevices</button>
+              <button id="btnSetPreferredInput">setPreferredInput</button>
+              <button id="btnClearPreferredInput">clearPreferredInput</button>
+              <button id="btnSetOutputRoute">setOutputRoute</button>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>startCapture Options</h2>
+            <div class="grid three">
+              <div class="field">
+                <label for="profile">profile</label>
+                <select id="profile">
+                  <option value="waveform">waveform</option>
+                  <option value="pipecat">pipecat</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="mode">mode</label>
+                <select id="mode">
+                  <option value="measurement">measurement</option>
+                  <option value="voice_chat">voice_chat</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="chunkMs">chunkMs</label>
+                <input id="chunkMs" type="number" value="20" min="20" max="20" step="1" />
+              </div>
+            </div>
+            <div class="grid three" style="margin-top: 0.65rem">
+              <div class="field">
+                <label for="audioLevelIntervalMs">audioLevelIntervalMs</label>
+                <input id="audioLevelIntervalMs" type="number" value="50" min="20" step="1" />
+              </div>
+              <div class="field">
+                <label for="startPreferredInput">preferredInputId (optional)</label>
+                <input id="startPreferredInput" type="text" placeholder="from getDevices().inputs[].id" />
+              </div>
+              <div class="field">
+                <label for="startOutputRoute">outputRoute</label>
+                <select id="startOutputRoute">
+                  <option value="system">system</option>
+                  <option value="speaker">speaker</option>
+                  <option value="receiver">receiver</option>
+                </select>
+              </div>
+            </div>
+            <div class="check-row" style="margin-top: 0.65rem">
+              <label class="check"
+                ><input id="stream16" type="checkbox" checked />
+                <span>pcm16k_s16le</span>
+              </label>
+              <label class="check"
+                ><input id="stream48" type="checkbox" checked />
+                <span>pcm48k_s16le</span>
+              </label>
+              <label class="check"
+                ><input id="emitAudioLevel" type="checkbox" checked />
+                <span>emitAudioLevel</span>
+              </label>
+              <label class="check"
+                ><input id="voiceProcessing" type="checkbox" />
+                <span>voiceProcessing</span>
+              </label>
+            </div>
+            <p class="tiny" id="profileHint">
+              Hint: waveform => measurement + voiceProcessing false; pipecat => voice_chat + voiceProcessing true.
+            </p>
+          </section>
+
+          <section class="section">
+            <h2>Capture Runtime</h2>
+            <div class="grid two">
+              <div class="field">
+                <label for="captureId">captureId</label>
+                <input id="captureId" type="text" placeholder="auto-filled after startCapture" />
+              </div>
+              <div class="field">
+                <label for="flushTimeoutMs">flushTimeoutMs (stop)</label>
+                <input id="flushTimeoutMs" type="number" value="150" min="10" step="10" />
+              </div>
+            </div>
+            <div class="buttons" style="margin-top: 0.65rem">
+              <button id="btnStartCapture" class="primary">startCapture</button>
+              <button id="btnStopCapture" class="warn">stopCapture</button>
+              <button id="btnMuteMic">setMicEnabled(false)</button>
+              <button id="btnUnmuteMic" class="good">setMicEnabled(true)</button>
+            </div>
+          </section>
+        </article>
+
+        <article class="panel">
+          <section class="section">
+            <div class="monitor-top">
+              <div class="chip" id="stateChip" data-state="idle">idle</div>
+              <div class="tiny">active capture: <strong id="activeCapture">none</strong></div>
+            </div>
+
+            <div class="stream-grid">
+              <article class="stream-card">
+                <h3>pcm16k_s16le</h3>
+                <div class="kv">
+                  <span>chunks</span><strong id="s16Chunks">0</strong>
+                  <span>last seq</span><strong id="s16Seq">-</strong>
+                  <span>seq gaps</span><strong id="s16Gaps">0</strong>
+                  <span>frames</span><strong id="s16Frames">0</strong>
+                  <span>bytes</span><strong id="s16Bytes">0</strong>
+                  <span>last ptsMs</span><strong id="s16Pts">-</strong>
+                  <span>final chunks</span><strong id="s16Final">0</strong>
+                </div>
+              </article>
+
+              <article class="stream-card">
+                <h3>pcm48k_s16le</h3>
+                <div class="kv">
+                  <span>chunks</span><strong id="s48Chunks">0</strong>
+                  <span>last seq</span><strong id="s48Seq">-</strong>
+                  <span>seq gaps</span><strong id="s48Gaps">0</strong>
+                  <span>frames</span><strong id="s48Frames">0</strong>
+                  <span>bytes</span><strong id="s48Bytes">0</strong>
+                  <span>last ptsMs</span><strong id="s48Pts">-</strong>
+                  <span>final chunks</span><strong id="s48Final">0</strong>
+                </div>
+              </article>
+            </div>
+
+            <div class="meter-group">
+              <div class="meter-row">
+                <span>RMS</span>
+                <div class="meter-shell"><div class="meter-fill" id="rmsFill"></div></div>
+                <strong id="rmsValue">0.000</strong>
+              </div>
+              <div class="meter-row">
+                <span>PEAK</span>
+                <div class="meter-shell"><div class="meter-fill peak" id="peakFill"></div></div>
+                <strong id="peakValue">0.000</strong>
+              </div>
+              <div class="meter-row">
+                <span>dBFS</span>
+                <div class="meter-shell"><div class="meter-fill" id="dbfsFill"></div></div>
+                <strong id="dbfsValue">-90.0</strong>
+              </div>
+            </div>
+
+            <canvas id="levelCanvas" width="620" height="180"></canvas>
+          </section>
+
+          <section class="section">
+            <h2>Diagnostics Snapshot</h2>
+            <div class="diagnostics">
+              <pre id="diagnosticsOutput">{}</pre>
+            </div>
+          </section>
+
+          <section class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center">
+              <h2 style="margin-bottom: 0">Event Log</h2>
+              <button id="btnClearLog">clear</button>
+            </div>
+            <div class="logs" id="logContainer"></div>
+          </section>
+        </article>
+      </section>
     </main>
 
-    <script src="./js/example.js" type="module"></script>
+    <script type="module">
+      import { NativeMic } from 'native-mic-capacitor';
+
+      const EVENT_NAMES = [
+        'micStateChanged',
+        'micPcmChunk',
+        'micAudioLevel',
+        'micRouteChanged',
+        'micInterruption',
+        'micError',
+      ];
+
+      const STREAM_KEYS = ['pcm16k_s16le', 'pcm48k_s16le'];
+
+      const el = {
+        methodResult: document.getElementById('methodResult'),
+        diagnosticsOutput: document.getElementById('diagnosticsOutput'),
+        stateChip: document.getElementById('stateChip'),
+        activeCapture: document.getElementById('activeCapture'),
+        logContainer: document.getElementById('logContainer'),
+
+        preferredInputSelect: document.getElementById('preferredInputSelect'),
+        startPreferredInput: document.getElementById('startPreferredInput'),
+        routeSelect: document.getElementById('routeSelect'),
+        startOutputRoute: document.getElementById('startOutputRoute'),
+
+        profile: document.getElementById('profile'),
+        mode: document.getElementById('mode'),
+        chunkMs: document.getElementById('chunkMs'),
+        stream16: document.getElementById('stream16'),
+        stream48: document.getElementById('stream48'),
+        emitAudioLevel: document.getElementById('emitAudioLevel'),
+        audioLevelIntervalMs: document.getElementById('audioLevelIntervalMs'),
+        voiceProcessing: document.getElementById('voiceProcessing'),
+
+        captureId: document.getElementById('captureId'),
+        flushTimeoutMs: document.getElementById('flushTimeoutMs'),
+
+        s16Chunks: document.getElementById('s16Chunks'),
+        s16Seq: document.getElementById('s16Seq'),
+        s16Gaps: document.getElementById('s16Gaps'),
+        s16Frames: document.getElementById('s16Frames'),
+        s16Bytes: document.getElementById('s16Bytes'),
+        s16Pts: document.getElementById('s16Pts'),
+        s16Final: document.getElementById('s16Final'),
+
+        s48Chunks: document.getElementById('s48Chunks'),
+        s48Seq: document.getElementById('s48Seq'),
+        s48Gaps: document.getElementById('s48Gaps'),
+        s48Frames: document.getElementById('s48Frames'),
+        s48Bytes: document.getElementById('s48Bytes'),
+        s48Pts: document.getElementById('s48Pts'),
+        s48Final: document.getElementById('s48Final'),
+
+        rmsFill: document.getElementById('rmsFill'),
+        peakFill: document.getElementById('peakFill'),
+        dbfsFill: document.getElementById('dbfsFill'),
+        rmsValue: document.getElementById('rmsValue'),
+        peakValue: document.getElementById('peakValue'),
+        dbfsValue: document.getElementById('dbfsValue'),
+        levelCanvas: document.getElementById('levelCanvas'),
+      };
+
+      const app = {
+        state: 'idle',
+        captureId: null,
+        listenersAttached: false,
+        listenerHandles: [],
+        chunkStats: createChunkStats(),
+        dbfsHistory: [],
+      };
+
+      function createChunkStats() {
+        return {
+          pcm16k_s16le: emptyChunkStat(),
+          pcm48k_s16le: emptyChunkStat(),
+        };
+      }
+
+      function emptyChunkStat() {
+        return {
+          chunks: 0,
+          lastSeq: null,
+          seqGaps: 0,
+          frames: 0,
+          bytes: 0,
+          lastPts: null,
+          finalChunks: 0,
+        };
+      }
+
+      function safeJson(value) {
+        try {
+          return JSON.stringify(value, null, 2);
+        } catch {
+          return String(value);
+        }
+      }
+
+      function parseError(error) {
+        if (typeof error === 'string') {
+          return { message: error };
+        }
+
+        if (!error || typeof error !== 'object') {
+          return { message: 'Unknown error', value: error };
+        }
+
+        const parsed = {
+          message: error.message ?? 'Unknown error',
+          code: error.code,
+          data: error.data,
+        };
+        return parsed;
+      }
+
+      function setState(nextState) {
+        app.state = nextState;
+        el.stateChip.dataset.state = nextState;
+        el.stateChip.textContent = nextState;
+      }
+
+      function setCaptureId(captureId) {
+        app.captureId = captureId || null;
+        el.captureId.value = app.captureId ?? '';
+        el.activeCapture.textContent = app.captureId ?? 'none';
+      }
+
+      function renderMethodResult(name, payload) {
+        el.methodResult.textContent = `${name}\n${safeJson(payload)}`;
+      }
+
+      function appendLog(kind, label, payload) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'log-entry';
+
+        const head = document.createElement('div');
+        head.className = 'log-head';
+
+        const dot = document.createElement('span');
+        dot.className = `dot ${kind}`;
+
+        const time = document.createElement('time');
+        time.textContent = new Date().toLocaleTimeString();
+
+        const title = document.createElement('strong');
+        title.textContent = label;
+
+        head.appendChild(dot);
+        head.appendChild(time);
+        head.appendChild(title);
+
+        const body = document.createElement('pre');
+        body.textContent = safeJson(payload);
+
+        wrapper.appendChild(head);
+        wrapper.appendChild(body);
+        el.logContainer.prepend(wrapper);
+
+        while (el.logContainer.children.length > 220) {
+          el.logContainer.removeChild(el.logContainer.lastChild);
+        }
+      }
+
+      function decodeBase64Bytes(base64Value) {
+        const padding = (base64Value.match(/=*$/) ?? [''])[0].length;
+        return Math.floor((base64Value.length * 3) / 4) - padding;
+      }
+
+      function resetStats() {
+        app.chunkStats = createChunkStats();
+        app.dbfsHistory = [];
+        updateChunkCards();
+        updateAudioLevel(0, 0, -90);
+        drawLevelHistory();
+      }
+
+      function updateChunkCards() {
+        const map = {
+          pcm16k_s16le: {
+            chunks: el.s16Chunks,
+            seq: el.s16Seq,
+            gaps: el.s16Gaps,
+            frames: el.s16Frames,
+            bytes: el.s16Bytes,
+            pts: el.s16Pts,
+            finalChunks: el.s16Final,
+          },
+          pcm48k_s16le: {
+            chunks: el.s48Chunks,
+            seq: el.s48Seq,
+            gaps: el.s48Gaps,
+            frames: el.s48Frames,
+            bytes: el.s48Bytes,
+            pts: el.s48Pts,
+            finalChunks: el.s48Final,
+          },
+        };
+
+        for (const stream of STREAM_KEYS) {
+          const stats = app.chunkStats[stream];
+          const target = map[stream];
+          target.chunks.textContent = String(stats.chunks);
+          target.seq.textContent = stats.lastSeq === null ? '-' : String(stats.lastSeq);
+          target.gaps.textContent = String(stats.seqGaps);
+          target.frames.textContent = String(stats.frames);
+          target.bytes.textContent = String(stats.bytes);
+          target.pts.textContent = stats.lastPts === null ? '-' : String(stats.lastPts);
+          target.finalChunks.textContent = String(stats.finalChunks);
+        }
+      }
+
+      function updateAudioLevel(rms, peak, dbfs) {
+        const safeRms = Number.isFinite(rms) ? Math.max(0, Math.min(1, rms)) : 0;
+        const safePeak = Number.isFinite(peak) ? Math.max(0, Math.min(1, peak)) : 0;
+        const safeDbfs = Number.isFinite(dbfs) ? Math.max(-90, Math.min(0, dbfs)) : -90;
+        const dbfsNormalized = (safeDbfs + 90) / 90;
+
+        el.rmsFill.style.width = `${(safeRms * 100).toFixed(1)}%`;
+        el.peakFill.style.width = `${(safePeak * 100).toFixed(1)}%`;
+        el.dbfsFill.style.width = `${(dbfsNormalized * 100).toFixed(1)}%`;
+
+        el.rmsValue.textContent = safeRms.toFixed(3);
+        el.peakValue.textContent = safePeak.toFixed(3);
+        el.dbfsValue.textContent = safeDbfs.toFixed(1);
+      }
+
+      function drawLevelHistory() {
+        const canvas = el.levelCanvas;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return;
+        }
+
+        const width = canvas.width;
+        const height = canvas.height;
+        context.clearRect(0, 0, width, height);
+
+        context.fillStyle = 'rgba(255,255,255,0.70)';
+        context.fillRect(0, 0, width, height);
+
+        context.strokeStyle = 'rgba(29,35,44,0.10)';
+        context.beginPath();
+        for (let index = 0; index <= 4; index++) {
+          const y = (height * index) / 4;
+          context.moveTo(0, y);
+          context.lineTo(width, y);
+        }
+        context.stroke();
+
+        if (!app.dbfsHistory.length) {
+          return;
+        }
+
+        context.strokeStyle = '#01658f';
+        context.lineWidth = 2;
+        context.beginPath();
+        app.dbfsHistory.forEach((dbfs, index) => {
+          const x = (index / Math.max(1, app.dbfsHistory.length - 1)) * width;
+          const y = height - (((dbfs + 90) / 90) * height);
+          if (index === 0) {
+            context.moveTo(x, y);
+          } else {
+            context.lineTo(x, y);
+          }
+        });
+        context.stroke();
+      }
+
+      function pushDbfs(dbfs) {
+        if (!Number.isFinite(dbfs)) {
+          return;
+        }
+        app.dbfsHistory.push(Math.max(-90, Math.min(0, dbfs)));
+        while (app.dbfsHistory.length > 140) {
+          app.dbfsHistory.shift();
+        }
+        drawLevelHistory();
+      }
+
+      async function runCall(name, runner) {
+        try {
+          const result = await runner();
+          renderMethodResult(name, result ?? { ok: true });
+          appendLog('ok', name, result ?? { ok: true });
+          return result;
+        } catch (error) {
+          const parsed = parseError(error);
+          renderMethodResult(`${name} (error)`, parsed);
+          appendLog('error', name, parsed);
+          throw error;
+        }
+      }
+
+      function onMicEvent(eventName, payload) {
+        appendLog('event', eventName, payload);
+
+        if (eventName === 'micStateChanged') {
+          if (payload?.state) {
+            setState(payload.state);
+          }
+          if (payload?.captureId) {
+            setCaptureId(payload.captureId);
+          }
+          return;
+        }
+
+        if (eventName === 'micPcmChunk') {
+          const stream = payload?.stream;
+          if (!STREAM_KEYS.includes(stream)) {
+            return;
+          }
+
+          const stats = app.chunkStats[stream];
+          stats.chunks += 1;
+          stats.frames += Number(payload?.frames ?? 0);
+          stats.bytes += decodeBase64Bytes(String(payload?.dataBase64 ?? ''));
+          stats.lastPts = payload?.ptsMs ?? stats.lastPts;
+
+          const incomingSeq = Number(payload?.seq);
+          if (Number.isFinite(incomingSeq)) {
+            if (stats.lastSeq !== null) {
+              if (incomingSeq > stats.lastSeq + 1) {
+                stats.seqGaps += incomingSeq - stats.lastSeq - 1;
+              } else if (incomingSeq <= stats.lastSeq) {
+                stats.seqGaps += 1;
+              }
+            }
+            stats.lastSeq = incomingSeq;
+          }
+
+          if (payload?.final === true) {
+            stats.finalChunks += 1;
+          }
+
+          if (payload?.captureId) {
+            setCaptureId(payload.captureId);
+          }
+
+          updateChunkCards();
+          return;
+        }
+
+        if (eventName === 'micAudioLevel') {
+          updateAudioLevel(payload?.rms, payload?.peak, payload?.dbfs);
+          pushDbfs(payload?.dbfs);
+          return;
+        }
+
+        if (eventName === 'micInterruption' && payload?.phase === 'began') {
+          setState('paused');
+          return;
+        }
+
+        if (eventName === 'micError') {
+          el.stateChip.dataset.state = 'error';
+        }
+      }
+
+      async function attachListeners() {
+        if (app.listenersAttached) {
+          return;
+        }
+
+        for (const eventName of EVENT_NAMES) {
+          const handle = await NativeMic.addListener(eventName, (payload) => onMicEvent(eventName, payload));
+          app.listenerHandles.push(handle);
+        }
+
+        app.listenersAttached = true;
+        appendLog('ok', 'listeners attached', { events: EVENT_NAMES });
+      }
+
+      async function removeListeners() {
+        const removals = app.listenerHandles.map((handle) => handle.remove());
+        await Promise.allSettled(removals);
+        app.listenerHandles = [];
+        app.listenersAttached = false;
+      }
+
+      function selectedOutputStreams() {
+        const streams = [];
+        if (el.stream16.checked) {
+          streams.push('pcm16k_s16le');
+        }
+        if (el.stream48.checked) {
+          streams.push('pcm48k_s16le');
+        }
+        return streams;
+      }
+
+      function numberOrUndefined(value) {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+
+      function resolveCaptureId() {
+        return el.captureId.value.trim() || app.captureId;
+      }
+
+      function populateInputSelect(inputs, selectedInputId) {
+        el.preferredInputSelect.innerHTML = '<option value="">(system default)</option>';
+
+        for (const input of inputs ?? []) {
+          const option = document.createElement('option');
+          option.value = input.id;
+          option.textContent = `${input.label} [${input.type}]`;
+          el.preferredInputSelect.appendChild(option);
+        }
+
+        if (selectedInputId) {
+          el.preferredInputSelect.value = selectedInputId;
+          el.startPreferredInput.value = selectedInputId;
+        }
+      }
+
+      async function refreshDevices() {
+        const result = await runCall('getDevices', () => NativeMic.getDevices());
+        populateInputSelect(result?.inputs ?? [], result?.selectedInputId);
+      }
+
+      function bindUi() {
+        document.getElementById('btnIsAvailable').addEventListener('click', async () => {
+          await runCall('isAvailable', () => NativeMic.isAvailable());
+        });
+
+        document.getElementById('btnCheckPermissions').addEventListener('click', async () => {
+          await runCall('checkPermissions', () => NativeMic.checkPermissions());
+        });
+
+        document.getElementById('btnRequestPermissions').addEventListener('click', async () => {
+          await runCall('requestPermissions', () => NativeMic.requestPermissions());
+        });
+
+        document.getElementById('btnGetState').addEventListener('click', async () => {
+          const result = await runCall('getState', () => NativeMic.getState());
+          if (result?.state) {
+            setState(result.state);
+          }
+        });
+
+        document.getElementById('btnGetDiagnostics').addEventListener('click', async () => {
+          const result = await runCall('getDiagnostics', () => NativeMic.getDiagnostics());
+          el.diagnosticsOutput.textContent = safeJson(result ?? {});
+        });
+
+        document.getElementById('btnGetDevices').addEventListener('click', refreshDevices);
+
+        document.getElementById('btnSetPreferredInput').addEventListener('click', async () => {
+          const inputId = el.preferredInputSelect.value || null;
+          await runCall('setPreferredInput', () => NativeMic.setPreferredInput({ inputId }));
+        });
+
+        document.getElementById('btnClearPreferredInput').addEventListener('click', async () => {
+          await runCall('setPreferredInput(null)', () => NativeMic.setPreferredInput({ inputId: null }));
+          el.preferredInputSelect.value = '';
+          el.startPreferredInput.value = '';
+        });
+
+        document.getElementById('btnSetOutputRoute').addEventListener('click', async () => {
+          const route = el.routeSelect.value;
+          await runCall('setOutputRoute', () => NativeMic.setOutputRoute({ route }));
+        });
+
+        document.getElementById('btnStartCapture').addEventListener('click', async () => {
+          const outputStreams = selectedOutputStreams();
+          if (!outputStreams.length) {
+            appendLog('error', 'startCapture', { message: 'Select at least one output stream.' });
+            return;
+          }
+
+          const options = {
+            profile: el.profile.value,
+            mode: el.mode.value,
+            outputStreams,
+            chunkMs: numberOrUndefined(el.chunkMs.value),
+            emitAudioLevel: el.emitAudioLevel.checked,
+            audioLevelIntervalMs: numberOrUndefined(el.audioLevelIntervalMs.value),
+            voiceProcessing: el.voiceProcessing.checked,
+            outputRoute: el.startOutputRoute.value,
+          };
+
+          const preferredInputId = el.startPreferredInput.value.trim();
+          if (preferredInputId) {
+            options.preferredInputId = preferredInputId;
+          }
+
+          resetStats();
+          const result = await runCall('startCapture', () => NativeMic.startCapture(options));
+          if (result?.captureId) {
+            setCaptureId(result.captureId);
+          }
+          setState('running');
+        });
+
+        document.getElementById('btnStopCapture').addEventListener('click', async () => {
+          const captureId = resolveCaptureId();
+          if (!captureId) {
+            appendLog('error', 'stopCapture', { message: 'captureId is required.' });
+            return;
+          }
+
+          const options = { captureId };
+          const flushTimeoutMs = numberOrUndefined(el.flushTimeoutMs.value);
+          if (flushTimeoutMs !== undefined) {
+            options.flushTimeoutMs = flushTimeoutMs;
+          }
+
+          const result = await runCall('stopCapture', () => NativeMic.stopCapture(options));
+          if (result?.captureId === app.captureId) {
+            setCaptureId(null);
+          }
+          setState('idle');
+        });
+
+        document.getElementById('btnMuteMic').addEventListener('click', async () => {
+          const captureId = resolveCaptureId();
+          if (!captureId) {
+            appendLog('error', 'setMicEnabled(false)', { message: 'captureId is required.' });
+            return;
+          }
+          await runCall('setMicEnabled(false)', () => NativeMic.setMicEnabled({ captureId, enabled: false }));
+        });
+
+        document.getElementById('btnUnmuteMic').addEventListener('click', async () => {
+          const captureId = resolveCaptureId();
+          if (!captureId) {
+            appendLog('error', 'setMicEnabled(true)', { message: 'captureId is required.' });
+            return;
+          }
+          await runCall('setMicEnabled(true)', () => NativeMic.setMicEnabled({ captureId, enabled: true }));
+        });
+
+        document.getElementById('btnClearLog').addEventListener('click', () => {
+          el.logContainer.innerHTML = '';
+        });
+
+        el.profile.addEventListener('change', () => {
+          if (el.profile.value === 'pipecat') {
+            el.mode.value = 'voice_chat';
+            el.voiceProcessing.checked = true;
+          } else {
+            el.mode.value = 'measurement';
+            el.voiceProcessing.checked = false;
+          }
+        });
+      }
+
+      async function bootstrap() {
+        bindUi();
+        resetStats();
+        setState('idle');
+        setCaptureId(null);
+        drawLevelHistory();
+
+        try {
+          await attachListeners();
+        } catch (error) {
+          appendLog('error', 'attachListeners', parseError(error));
+        }
+
+        try {
+          await runCall('isAvailable', () => NativeMic.isAvailable());
+          const state = await runCall('getState', () => NativeMic.getState());
+          if (state?.state) {
+            setState(state.state);
+          }
+          await refreshDevices();
+        } catch {
+          // Surface through runCall logs and keep the page interactive.
+        }
+      }
+
+      window.addEventListener('beforeunload', () => {
+        void removeListeners();
+      });
+
+      void bootstrap();
+    </script>
   </body>
 </html>
