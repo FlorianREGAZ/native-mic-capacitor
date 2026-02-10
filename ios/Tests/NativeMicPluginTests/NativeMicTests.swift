@@ -2,14 +2,14 @@ import XCTest
 @testable import NativeMicPlugin
 
 class NativeMicTests: XCTestCase {
-    func testEcho() {
-        // This is an example of a functional test case for a plugin.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+    func testOutputStreamSampleRates() {
+        XCTAssertEqual(OutputStream.pcm16k.sampleRate, 16_000)
+        XCTAssertEqual(OutputStream.pcm48k.sampleRate, 48_000)
+    }
 
-        let implementation = NativeMic()
-        let value = "Hello, World!"
-        let result = implementation.echo(value)
-
-        XCTAssertEqual(value, result)
+    func testPermissionStateRawValues() {
+        XCTAssertEqual(MicPermissionState.prompt.rawValue, "prompt")
+        XCTAssertEqual(MicPermissionState.granted.rawValue, "granted")
+        XCTAssertEqual(MicPermissionState.denied.rawValue, "denied")
     }
 }
