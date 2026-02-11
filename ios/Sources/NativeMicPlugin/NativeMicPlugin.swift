@@ -16,10 +16,25 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "stopCapture", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setMicEnabled", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getState", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getDiagnostics", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getDiagnostics", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcIsAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcConnect", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcDisconnect", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcSendDataMessage", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcSetMicEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcSetPreferredInput", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcSetOutputRoute", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcGetState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcGetDiagnostics", returnType: CAPPluginReturnPromise)
     ]
 
     private lazy var controller = NativeMicController { [weak self] eventName, payload in
+        DispatchQueue.main.async {
+            self?.notifyListeners(eventName, data: payload)
+        }
+    }
+
+    private lazy var webRtcController = NativeWebRTCController { [weak self] eventName, payload in
         DispatchQueue.main.async {
             self?.notifyListeners(eventName, data: payload)
         }
@@ -224,6 +239,227 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve(controller.getDiagnostics())
     }
 
+    @objc func webrtcIsAvailable(_ call: CAPPluginCall) {
+        call.resolve(webRtcController.isAvailable())
+    }
+
+    @objc func webrtcConnect(_ call: CAPPluginCall) {
+        let permission = controller.checkPermissions()
+        if permission != .granted {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: permission == .denied ? "Microphone permission denied." : "Microphone permission not determined.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        do {
+            let rawOptions = call.options.reduce(into: [String: Any]()) { partial, entry in
+                if let key = entry.key as? String {
+                    partial[key] = entry.value
+                } else {
+                    partial[String(describing: entry.key)] = entry.value
+                }
+            }
+            let options = try NativeWebRTCController.parseConnectOptions(rawOptions)
+            let result = try webRtcController.connect(options: options)
+            call.resolve(result.asDictionary())
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: nil)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: nil)
+        }
+    }
+
+    @objc func webrtcDisconnect(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        do {
+            try webRtcController.disconnect(connectionId: connectionId, reason: call.getString("reason"))
+            call.resolve()
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
+    @objc func webrtcSendDataMessage(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        guard let data = call.getString("data") else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "data is required.",
+                recoverable: false,
+                connectionId: connectionId
+            )
+            return
+        }
+
+        do {
+            try webRtcController.sendDataMessage(connectionId: connectionId, data: data)
+            call.resolve()
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
+    @objc func webrtcSetMicEnabled(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        guard let enabled = call.getBool("enabled") else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "enabled must be a boolean.",
+                recoverable: false,
+                connectionId: connectionId
+            )
+            return
+        }
+
+        do {
+            try webRtcController.setMicEnabled(connectionId: connectionId, enabled: enabled)
+            call.resolve()
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
+    @objc func webrtcSetPreferredInput(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        do {
+            try webRtcController.setPreferredInput(connectionId: connectionId, inputId: call.getString("inputId"))
+            call.resolve()
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
+    @objc func webrtcSetOutputRoute(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        guard let routeValue = call.getString("route"), let route = OutputRoute(rawValue: routeValue) else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "route must be one of: system, speaker, receiver.",
+                recoverable: false,
+                connectionId: connectionId
+            )
+            return
+        }
+
+        do {
+            try webRtcController.setOutputRoute(connectionId: connectionId, route: route)
+            call.resolve()
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
+    @objc func webrtcGetState(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        do {
+            let result = try webRtcController.getState(connectionId: connectionId)
+            call.resolve(result.asDictionary())
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
+    @objc func webrtcGetDiagnostics(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        do {
+            call.resolve(try webRtcController.getDiagnostics(connectionId: connectionId))
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
     private func parseOutputStreams(_ call: CAPPluginCall) -> [OutputStream]? {
         guard let rawStreams = call.getArray("outputStreams") else {
             return nil
@@ -285,6 +521,51 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
             message: "Unexpected native error.",
             recoverable: false,
             captureId: captureId,
+            nativeCode: "\((error as NSError).code)"
+        )
+    }
+
+    private func rejectWebRTC(_ call: CAPPluginCall, with error: NativeWebRTCControllerError, connectionId: String?) {
+        rejectWebRTC(
+            call,
+            code: error.code,
+            message: error.message,
+            recoverable: error.recoverable,
+            connectionId: connectionId,
+            nativeCode: error.nativeCode
+        )
+    }
+
+    private func rejectWebRTC(
+        _ call: CAPPluginCall,
+        code: NativeWebRTCErrorCode,
+        message: String,
+        recoverable: Bool,
+        connectionId: String?,
+        nativeCode: String? = nil
+    ) {
+        var payload: [String: Any] = [
+            "code": code.rawValue,
+            "message": message,
+            "recoverable": recoverable
+        ]
+        if let connectionId {
+            payload["connectionId"] = connectionId
+        }
+        if let nativeCode {
+            payload["nativeCode"] = nativeCode
+        }
+        notifyListeners("webrtcError", data: payload)
+        call.reject(message, code.rawValue, nil, payload)
+    }
+
+    private func rejectUnexpectedWebRTC(_ call: CAPPluginCall, error: Error, connectionId: String?) {
+        rejectWebRTC(
+            call,
+            code: .internalError,
+            message: "Unexpected native WebRTC error.",
+            recoverable: false,
+            connectionId: connectionId,
             nativeCode: "\((error as NSError).code)"
         )
     }

@@ -24,12 +24,28 @@ npx cap sync
 * [`setMicEnabled(...)`](#setmicenabled)
 * [`getState()`](#getstate)
 * [`getDiagnostics()`](#getdiagnostics)
+* [`webrtcIsAvailable()`](#webrtcisavailable)
+* [`webrtcConnect(...)`](#webrtcconnect)
+* [`webrtcDisconnect(...)`](#webrtcdisconnect)
+* [`webrtcSendDataMessage(...)`](#webrtcsenddatamessage)
+* [`webrtcSetMicEnabled(...)`](#webrtcsetmicenabled)
+* [`webrtcSetPreferredInput(...)`](#webrtcsetpreferredinput)
+* [`webrtcSetOutputRoute(...)`](#webrtcsetoutputroute)
+* [`webrtcGetState(...)`](#webrtcgetstate)
+* [`webrtcGetDiagnostics(...)`](#webrtcgetdiagnostics)
 * [`addListener('micStateChanged', ...)`](#addlistenermicstatechanged-)
 * [`addListener('micPcmChunk', ...)`](#addlistenermicpcmchunk-)
 * [`addListener('micAudioLevel', ...)`](#addlistenermicaudiolevel-)
 * [`addListener('micRouteChanged', ...)`](#addlistenermicroutechanged-)
 * [`addListener('micInterruption', ...)`](#addlistenermicinterruption-)
 * [`addListener('micError', ...)`](#addlistenermicerror-)
+* [`addListener('webrtcStateChanged', ...)`](#addlistenerwebrtcstatechanged-)
+* [`addListener('webrtcDataMessage', ...)`](#addlistenerwebrtcdatamessage-)
+* [`addListener('webrtcTrackStarted', ...)`](#addlistenerwebrtctrackstarted-)
+* [`addListener('webrtcTrackStopped', ...)`](#addlistenerwebrtctrackstopped-)
+* [`addListener('webrtcLocalAudioLevel', ...)`](#addlistenerwebrtclocalaudiolevel-)
+* [`addListener('webrtcRemoteAudioLevel', ...)`](#addlistenerwebrtcremoteaudiolevel-)
+* [`addListener('webrtcError', ...)`](#addlistenerwebrtcerror-)
 * [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
@@ -174,6 +190,127 @@ getDiagnostics() => Promise<Record<string, unknown>>
 --------------------
 
 
+### webrtcIsAvailable()
+
+```typescript
+webrtcIsAvailable() => Promise<{ available: boolean; reason?: string; }>
+```
+
+**Returns:** <code>Promise&lt;{ available: boolean; reason?: string; }&gt;</code>
+
+--------------------
+
+
+### webrtcConnect(...)
+
+```typescript
+webrtcConnect(options: NativeWebRTCConnectOptions) => Promise<NativeWebRTCConnectResult>
+```
+
+| Param         | Type                                                                              |
+| ------------- | --------------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#nativewebrtcconnectoptions">NativeWebRTCConnectOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#nativewebrtcconnectresult">NativeWebRTCConnectResult</a>&gt;</code>
+
+--------------------
+
+
+### webrtcDisconnect(...)
+
+```typescript
+webrtcDisconnect(options: { connectionId: string; reason?: string; }) => Promise<void>
+```
+
+| Param         | Type                                                    |
+| ------------- | ------------------------------------------------------- |
+| **`options`** | <code>{ connectionId: string; reason?: string; }</code> |
+
+--------------------
+
+
+### webrtcSendDataMessage(...)
+
+```typescript
+webrtcSendDataMessage(options: { connectionId: string; data: string; }) => Promise<void>
+```
+
+| Param         | Type                                                 |
+| ------------- | ---------------------------------------------------- |
+| **`options`** | <code>{ connectionId: string; data: string; }</code> |
+
+--------------------
+
+
+### webrtcSetMicEnabled(...)
+
+```typescript
+webrtcSetMicEnabled(options: { connectionId: string; enabled: boolean; }) => Promise<void>
+```
+
+| Param         | Type                                                     |
+| ------------- | -------------------------------------------------------- |
+| **`options`** | <code>{ connectionId: string; enabled: boolean; }</code> |
+
+--------------------
+
+
+### webrtcSetPreferredInput(...)
+
+```typescript
+webrtcSetPreferredInput(options: { connectionId: string; inputId: string | null; }) => Promise<void>
+```
+
+| Param         | Type                                                            |
+| ------------- | --------------------------------------------------------------- |
+| **`options`** | <code>{ connectionId: string; inputId: string \| null; }</code> |
+
+--------------------
+
+
+### webrtcSetOutputRoute(...)
+
+```typescript
+webrtcSetOutputRoute(options: { connectionId: string; route: OutputRoute; }) => Promise<void>
+```
+
+| Param         | Type                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------- |
+| **`options`** | <code>{ connectionId: string; route: <a href="#outputroute">OutputRoute</a>; }</code> |
+
+--------------------
+
+
+### webrtcGetState(...)
+
+```typescript
+webrtcGetState(options: { connectionId: string; }) => Promise<NativeWebRTCStateResult>
+```
+
+| Param         | Type                                   |
+| ------------- | -------------------------------------- |
+| **`options`** | <code>{ connectionId: string; }</code> |
+
+**Returns:** <code>Promise&lt;<a href="#nativewebrtcstateresult">NativeWebRTCStateResult</a>&gt;</code>
+
+--------------------
+
+
+### webrtcGetDiagnostics(...)
+
+```typescript
+webrtcGetDiagnostics(options: { connectionId: string; }) => Promise<Record<string, unknown>>
+```
+
+| Param         | Type                                   |
+| ------------- | -------------------------------------- |
+| **`options`** | <code>{ connectionId: string; }</code> |
+
+**Returns:** <code>Promise&lt;<a href="#record">Record</a>&lt;string, unknown&gt;&gt;</code>
+
+--------------------
+
+
 ### addListener('micStateChanged', ...)
 
 ```typescript
@@ -270,6 +407,118 @@ addListener(eventName: 'micError', listenerFunc: (event: MicErrorEvent) => void)
 --------------------
 
 
+### addListener('webrtcStateChanged', ...)
+
+```typescript
+addListener(eventName: 'webrtcStateChanged', listenerFunc: (event: NativeWebRTCStateChangedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'webrtcStateChanged'</code>                                                                           |
+| **`listenerFunc`** | <code>(event: <a href="#nativewebrtcstatechangedevent">NativeWebRTCStateChangedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('webrtcDataMessage', ...)
+
+```typescript
+addListener(eventName: 'webrtcDataMessage', listenerFunc: (event: NativeWebRTCDataMessageEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                                      |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'webrtcDataMessage'</code>                                                                          |
+| **`listenerFunc`** | <code>(event: <a href="#nativewebrtcdatamessageevent">NativeWebRTCDataMessageEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('webrtcTrackStarted', ...)
+
+```typescript
+addListener(eventName: 'webrtcTrackStarted', listenerFunc: (event: NativeWebRTCTrackEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'webrtcTrackStarted'</code>                                                             |
+| **`listenerFunc`** | <code>(event: <a href="#nativewebrtctrackevent">NativeWebRTCTrackEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('webrtcTrackStopped', ...)
+
+```typescript
+addListener(eventName: 'webrtcTrackStopped', listenerFunc: (event: NativeWebRTCTrackEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'webrtcTrackStopped'</code>                                                             |
+| **`listenerFunc`** | <code>(event: <a href="#nativewebrtctrackevent">NativeWebRTCTrackEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('webrtcLocalAudioLevel', ...)
+
+```typescript
+addListener(eventName: 'webrtcLocalAudioLevel', listenerFunc: (event: NativeWebRTCAudioLevelEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'webrtcLocalAudioLevel'</code>                                                                    |
+| **`listenerFunc`** | <code>(event: <a href="#nativewebrtcaudiolevelevent">NativeWebRTCAudioLevelEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('webrtcRemoteAudioLevel', ...)
+
+```typescript
+addListener(eventName: 'webrtcRemoteAudioLevel', listenerFunc: (event: NativeWebRTCAudioLevelEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'webrtcRemoteAudioLevel'</code>                                                                   |
+| **`listenerFunc`** | <code>(event: <a href="#nativewebrtcaudiolevelevent">NativeWebRTCAudioLevelEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('webrtcError', ...)
+
+```typescript
+addListener(eventName: 'webrtcError', listenerFunc: (event: NativeWebRTCErrorEvent) => void) => Promise<PluginListenerHandle>
+```
+
+| Param              | Type                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'webrtcError'</code>                                                                    |
+| **`listenerFunc`** | <code>(event: <a href="#nativewebrtcerrorevent">NativeWebRTCErrorEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
 ### removeAllListeners()
 
 ```typescript
@@ -334,6 +583,52 @@ removeAllListeners() => Promise<void>
 | -------------------- | ------------------- |
 | **`captureId`**      | <code>string</code> |
 | **`flushTimeoutMs`** | <code>number</code> |
+
+
+#### NativeWebRTCConnectResult
+
+| Prop                      | Type                                                            |
+| ------------------------- | --------------------------------------------------------------- |
+| **`connectionId`**        | <code>string</code>                                             |
+| **`pcId`**                | <code>string</code>                                             |
+| **`selectedInputId`**     | <code>string</code>                                             |
+| **`selectedOutputRoute`** | <code><a href="#outputroute">OutputRoute</a></code>             |
+| **`state`**               | <code><a href="#nativewebrtcstate">NativeWebRTCState</a></code> |
+
+
+#### NativeWebRTCConnectOptions
+
+| Prop                      | Type                                                                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`connectionId`**        | <code>string</code>                                                                                                                                     |
+| **`webrtcRequest`**       | <code><a href="#webrtcrequestinfo">WebRTCRequestInfo</a></code>                                                                                         |
+| **`iceConfig`**           | <code>{ iceServers?: RTCIceServerLike[]; }</code>                                                                                                       |
+| **`waitForICEGathering`** | <code>boolean</code>                                                                                                                                    |
+| **`audioCodec`**          | <code>string \| null</code>                                                                                                                             |
+| **`videoCodec`**          | <code>string \| null</code>                                                                                                                             |
+| **`media`**               | <code>{ voiceProcessing?: boolean; startMicEnabled?: boolean; preferredInputId?: string; outputRoute?: <a href="#outputroute">OutputRoute</a>; }</code> |
+| **`reconnect`**           | <code>{ enabled?: boolean; maxAttempts?: number; backoffMs?: number; }</code>                                                                           |
+
+
+#### WebRTCRequestInfo
+
+| Prop              | Type                                                             |
+| ----------------- | ---------------------------------------------------------------- |
+| **`endpoint`**    | <code>string</code>                                              |
+| **`headers`**     | <code><a href="#record">Record</a>&lt;string, string&gt;</code>  |
+| **`requestData`** | <code><a href="#record">Record</a>&lt;string, unknown&gt;</code> |
+| **`timeoutMs`**   | <code>number</code>                                              |
+
+
+#### NativeWebRTCStateResult
+
+| Prop                     | Type                                                            |
+| ------------------------ | --------------------------------------------------------------- |
+| **`connectionId`**       | <code>string</code>                                             |
+| **`state`**              | <code><a href="#nativewebrtcstate">NativeWebRTCState</a></code> |
+| **`pcId`**               | <code>string</code>                                             |
+| **`iceConnectionState`** | <code>string</code>                                             |
+| **`signalingState`**     | <code>string</code>                                             |
 
 
 #### PluginListenerHandle
@@ -409,6 +704,52 @@ removeAllListeners() => Promise<void>
 | **`nativeCode`**  | <code>string</code>  |
 
 
+#### NativeWebRTCStateChangedEvent
+
+| Prop               | Type                                                            |
+| ------------------ | --------------------------------------------------------------- |
+| **`connectionId`** | <code>string</code>                                             |
+| **`state`**        | <code><a href="#nativewebrtcstate">NativeWebRTCState</a></code> |
+| **`reason`**       | <code>string</code>                                             |
+| **`pcId`**         | <code>string</code>                                             |
+
+
+#### NativeWebRTCDataMessageEvent
+
+| Prop               | Type                |
+| ------------------ | ------------------- |
+| **`connectionId`** | <code>string</code> |
+| **`data`**         | <code>string</code> |
+
+
+#### NativeWebRTCTrackEvent
+
+| Prop               | Type                                             |
+| ------------------ | ------------------------------------------------ |
+| **`connectionId`** | <code>string</code>                              |
+| **`kind`**         | <code>'audio' \| 'video' \| 'screenVideo'</code> |
+| **`source`**       | <code>'remote' \| 'local'</code>                 |
+
+
+#### NativeWebRTCAudioLevelEvent
+
+| Prop               | Type                |
+| ------------------ | ------------------- |
+| **`connectionId`** | <code>string</code> |
+| **`level`**        | <code>number</code> |
+
+
+#### NativeWebRTCErrorEvent
+
+| Prop               | Type                                                                    |
+| ------------------ | ----------------------------------------------------------------------- |
+| **`connectionId`** | <code>string</code>                                                     |
+| **`code`**         | <code><a href="#nativewebrtcerrorcode">NativeWebRTCErrorCode</a></code> |
+| **`message`**      | <code>string</code>                                                     |
+| **`recoverable`**  | <code>boolean</code>                                                    |
+| **`nativeCode`**   | <code>string</code>                                                     |
+
+
 ### Type Aliases
 
 
@@ -442,5 +783,20 @@ removeAllListeners() => Promise<void>
 Construct a type with a set of properties K of type T
 
 <code>{ [P in K]: T; }</code>
+
+
+#### NativeWebRTCState
+
+<code>'idle' | 'initializing' | 'connecting' | 'connected' | 'ready' | 'reconnecting' | 'disconnecting' | 'error'</code>
+
+
+#### RTCIceServerLike
+
+<code>{ urls: string | string[]; username?: string; credential?: string; }</code>
+
+
+#### NativeWebRTCErrorCode
+
+<code>'E_WEBRTC_UNAVAILABLE' | 'E_PC_CREATE_FAILED' | 'E_NEGOTIATION_FAILED' | 'E_ICE_FAILED' | 'E_DATA_CHANNEL_FAILED' | 'E_ALREADY_RUNNING' | 'E_NOT_RUNNING' | 'E_INVALID_ARGUMENT' | 'E_INTERNAL'</code>
 
 </docgen-api>

@@ -5,6 +5,10 @@ import type {
 	MicPermissionState,
 	MicProfile,
 	NativeMicPlugin,
+	NativeWebRTCConnectOptions,
+	NativeWebRTCConnectResult,
+	NativeWebRTCErrorCode,
+	NativeWebRTCStateResult,
 	OutputRoute,
 	OutputStream,
 	SessionMode,
@@ -32,6 +36,11 @@ type NativeMicErrorCode =
 
 interface NativeMicPluginError extends Error {
 	code: NativeMicErrorCode;
+	data: Record<string, unknown>;
+}
+
+interface NativeWebRTCPluginError extends Error {
+	code: NativeWebRTCErrorCode;
 	data: Record<string, unknown>;
 }
 
@@ -555,6 +564,117 @@ export class NativeMicWeb extends WebPlugin implements NativeMicPlugin {
 		}
 
 		return diagnostics;
+	}
+
+	async webrtcIsAvailable(): Promise<{
+		available: boolean;
+		reason?: string;
+	}> {
+		return {
+			available: false,
+			reason: "Native WebRTC is not implemented on web.",
+		};
+	}
+
+	async webrtcConnect(
+		options: NativeWebRTCConnectOptions,
+	): Promise<NativeWebRTCConnectResult> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
+	async webrtcDisconnect(options: {
+		connectionId: string;
+		reason?: string;
+	}): Promise<void> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
+	async webrtcSendDataMessage(options: {
+		connectionId: string;
+		data: string;
+	}): Promise<void> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
+	async webrtcSetMicEnabled(options: {
+		connectionId: string;
+		enabled: boolean;
+	}): Promise<void> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
+	async webrtcSetPreferredInput(options: {
+		connectionId: string;
+		inputId: string | null;
+	}): Promise<void> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
+	async webrtcSetOutputRoute(options: {
+		connectionId: string;
+		route: OutputRoute;
+	}): Promise<void> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
+	async webrtcGetState(options: {
+		connectionId: string;
+	}): Promise<NativeWebRTCStateResult> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
+	async webrtcGetDiagnostics(options: {
+		connectionId: string;
+	}): Promise<Record<string, unknown>> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
 	}
 
 	private mapPermissionState(state: PermissionState): MicPermissionState {
@@ -1195,6 +1315,42 @@ export class NativeMicWeb extends WebPlugin implements NativeMicPlugin {
 			"data" in error &&
 			"message" in error
 		);
+	}
+
+	private resolveWebRTCConnectionId(connectionId: unknown): string | undefined {
+		if (typeof connectionId !== "string") {
+			return undefined;
+		}
+		const trimmed = connectionId.trim();
+		return trimmed.length > 0 ? trimmed : undefined;
+	}
+
+	private rejectWebRTC(
+		code: NativeWebRTCErrorCode,
+		message: string,
+		recoverable: boolean,
+		connectionId?: string,
+		nativeCode?: string,
+	): never {
+		const payload: Record<string, unknown> = {
+			code,
+			message,
+			recoverable,
+		};
+
+		if (connectionId) {
+			payload.connectionId = connectionId;
+		}
+		if (nativeCode !== undefined) {
+			payload.nativeCode = nativeCode;
+		}
+
+		this.notifyListeners("webrtcError", payload);
+
+		const error = new Error(message) as NativeWebRTCPluginError;
+		error.code = code;
+		error.data = payload;
+		throw error;
 	}
 
 	private nativeCodeFromError(error: unknown): string | undefined {

@@ -18,16 +18,21 @@ import org.json.JSONException;
 public class NativeMicPlugin extends Plugin {
 
     private NativeMic controller;
+    private NativeWebRTC webRtcController;
 
     @Override
     public void load() {
         controller = new NativeMic(getContext(), this::emitEventToJs);
+        webRtcController = new NativeWebRTC(getContext(), this::emitEventToJs);
     }
 
     @Override
     protected void handleOnDestroy() {
         if (controller != null) {
             controller.destroy();
+        }
+        if (webRtcController != null) {
+            webRtcController.destroy();
         }
         super.handleOnDestroy();
     }
@@ -238,6 +243,262 @@ public class NativeMicPlugin extends Plugin {
         call.resolve(controller.getDiagnostics());
     }
 
+    @PluginMethod
+    public void webrtcIsAvailable(PluginCall call) {
+        call.resolve(webRtcController.isAvailable());
+    }
+
+    @PluginMethod
+    public void webrtcConnect(PluginCall call) {
+        try {
+            NativeMic.validatePermissionForStart(toMicPermissionState(getPermissionState("microphone")));
+            NativeWebRTC.ConnectOptionsModel options = NativeWebRTC.parseConnectOptions(NativeWebRTC.extractMap(call.getData()));
+            NativeWebRTC.ConnectResultModel result = webRtcController.connect(options);
+            call.resolve(result.asJSObject());
+        } catch (NativeMic.NativeMicControllerError error) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                error.message,
+                error.recoverable,
+                null,
+                error.nativeCode,
+                null
+            );
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, null);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, null);
+        }
+    }
+
+    @PluginMethod
+    public void webrtcDisconnect(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        String reason = call.getString("reason");
+        try {
+            webRtcController.disconnect(connectionId, reason);
+            call.resolve();
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
+    @PluginMethod
+    public void webrtcSendDataMessage(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        String data = call.getString("data");
+        if (data == null) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "data is required.",
+                false,
+                connectionId,
+                null,
+                null
+            );
+            return;
+        }
+
+        try {
+            webRtcController.sendDataMessage(connectionId, data);
+            call.resolve();
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
+    @PluginMethod
+    public void webrtcSetMicEnabled(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        Boolean enabled = call.getBoolean("enabled");
+        if (enabled == null) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "enabled must be a boolean.",
+                false,
+                connectionId,
+                null,
+                null
+            );
+            return;
+        }
+
+        try {
+            webRtcController.setMicEnabled(connectionId, enabled);
+            call.resolve();
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
+    @PluginMethod
+    public void webrtcSetPreferredInput(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        String inputId = call.getString("inputId");
+
+        try {
+            webRtcController.setPreferredInput(connectionId, inputId);
+            call.resolve();
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
+    @PluginMethod
+    public void webrtcSetOutputRoute(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        String routeValue = call.getString("route");
+        NativeMic.OutputRoute route = NativeMic.OutputRoute.fromWireValue(routeValue);
+        if (route == null) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "route must be one of: system, speaker, receiver.",
+                false,
+                connectionId,
+                null,
+                null
+            );
+            return;
+        }
+
+        try {
+            webRtcController.setOutputRoute(connectionId, route);
+            call.resolve();
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
+    @PluginMethod
+    public void webrtcGetState(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        try {
+            NativeWebRTC.StateResultModel result = webRtcController.getState(connectionId);
+            call.resolve(result.asJSObject());
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
+    @PluginMethod
+    public void webrtcGetDiagnostics(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        try {
+            call.resolve(webRtcController.getDiagnostics(connectionId));
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
     static String toMicPermissionState(PermissionState state) {
         if (state == PermissionState.GRANTED) {
             return "granted";
@@ -298,6 +559,49 @@ public class NativeMicPlugin extends Plugin {
 
     private void rejectUnexpected(PluginCall call, Exception error, String captureId) {
         reject(call, NativeMic.NativeMicErrorCode.INTERNAL, "Unexpected native error.", false, captureId, String.valueOf(error.hashCode()));
+    }
+
+    private void rejectWebRTC(PluginCall call, NativeWebRTC.NativeWebRTCControllerError error, String connectionId) {
+        rejectWebRTC(call, error.code, error.message, error.recoverable, connectionId, error.nativeCode, null);
+    }
+
+    private void rejectWebRTC(
+        PluginCall call,
+        NativeWebRTC.NativeWebRTCErrorCode code,
+        String message,
+        boolean recoverable,
+        String connectionId,
+        String nativeCode,
+        String pcId
+    ) {
+        JSObject payload = new JSObject();
+        payload.put("code", code.wireValue);
+        payload.put("message", message);
+        payload.put("recoverable", recoverable);
+        if (connectionId != null) {
+            payload.put("connectionId", connectionId);
+        }
+        if (pcId != null) {
+            payload.put("pcId", pcId);
+        }
+        if (nativeCode != null) {
+            payload.put("nativeCode", nativeCode);
+        }
+
+        notifyListeners("webrtcError", payload);
+        call.reject(message, code.wireValue, null, payload);
+    }
+
+    private void rejectUnexpectedWebRTC(PluginCall call, Exception error, String connectionId) {
+        rejectWebRTC(
+            call,
+            NativeWebRTC.NativeWebRTCErrorCode.INTERNAL,
+            "Unexpected native WebRTC error.",
+            false,
+            connectionId,
+            String.valueOf(error.hashCode()),
+            null
+        );
     }
 
     private void emitEventToJs(String eventName, JSObject payload) {
