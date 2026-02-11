@@ -136,7 +136,7 @@ struct NativeWebRTCStateResultModel {
         static let candidateFlushDelayMs = 200
     }
 
-    private let queue = DispatchQueue(label: "com.memora.ai.nativemic.webrtc")
+    private let queue = DispatchQueue(label: "com.memora.ai.nativemic.webrtc", qos: .userInitiated)
     private let eventQueue = DispatchQueue(label: "com.memora.ai.nativemic.webrtc.events")
     private let queueKey = DispatchSpecificKey<Int>()
     private let session = AVAudioSession.sharedInstance()
@@ -591,7 +591,9 @@ struct NativeWebRTCStateResultModel {
         }
 
         let answerType = sdpType(from: (answerPayload["type"] as? String) ?? "answer")
-        activePcId = normalize(answerPayload["pc_id"] as? String) ?? activePcId
+        activePcId = normalize(answerPayload["pc_id"] as? String)
+            ?? normalize(answerPayload["pcId"] as? String)
+            ?? activePcId
 
         let answer = RTCSessionDescription(type: answerType, sdp: sdp)
         try setRemoteDescriptionLocked(answer)
@@ -619,7 +621,15 @@ struct NativeWebRTCStateResultModel {
             semaphore.signal()
         }
 
-        _ = semaphore.wait(timeout: .now() + 10)
+        let waitResult = semaphore.wait(timeout: .now() + 10)
+        if waitResult == .timedOut {
+            throw NativeWebRTCControllerError(
+                code: .negotiationFailed,
+                message: "Timed out while creating WebRTC offer.",
+                recoverable: false,
+                nativeCode: nil
+            )
+        }
 
         if let offeredError {
             throw NativeWebRTCControllerError(
@@ -660,7 +670,15 @@ struct NativeWebRTCStateResultModel {
             semaphore.signal()
         }
 
-        _ = semaphore.wait(timeout: .now() + 10)
+        let waitResult = semaphore.wait(timeout: .now() + 10)
+        if waitResult == .timedOut {
+            throw NativeWebRTCControllerError(
+                code: .negotiationFailed,
+                message: "Timed out while setting local WebRTC description.",
+                recoverable: false,
+                nativeCode: nil
+            )
+        }
 
         if let callbackError {
             throw NativeWebRTCControllerError(
@@ -690,7 +708,15 @@ struct NativeWebRTCStateResultModel {
             semaphore.signal()
         }
 
-        _ = semaphore.wait(timeout: .now() + 10)
+        let waitResult = semaphore.wait(timeout: .now() + 10)
+        if waitResult == .timedOut {
+            throw NativeWebRTCControllerError(
+                code: .negotiationFailed,
+                message: "Timed out while setting remote WebRTC description.",
+                recoverable: false,
+                nativeCode: nil
+            )
+        }
 
         if let callbackError {
             throw NativeWebRTCControllerError(
@@ -831,7 +857,15 @@ struct NativeWebRTCStateResultModel {
             semaphore.signal()
         }.resume()
 
-        _ = semaphore.wait(timeout: .now() + request.timeoutInterval + 2)
+        let waitResult = semaphore.wait(timeout: .now() + request.timeoutInterval + 2)
+        if waitResult == .timedOut {
+            throw NativeWebRTCControllerError(
+                code: errorCode,
+                message: errorMessage,
+                recoverable: false,
+                nativeCode: "timeout"
+            )
+        }
 
         if let responseError {
             throw NativeWebRTCControllerError(
@@ -1408,29 +1442,44 @@ struct NativeWebRTCStateResultModel {
 
         return try queue.sync(execute: block)
     }
+
+    private func dispatchOnQueue(_ block: @escaping () -> Void) {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            block()
+            return
+        }
+
+        queue.async(execute: block)
+    }
 }
 
 extension NativeWebRTCController: RTCPeerConnectionDelegate {
     public func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
-        syncOnQueue {
-            pendingCandidates.append(candidate)
-            scheduleIceCandidateFlushLocked()
+        dispatchOnQueue { [weak self] in
+            guard let self else {
+                return
+            }
+            self.pendingCandidates.append(candidate)
+            self.scheduleIceCandidateFlushLocked()
         }
     }
 
     public func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        syncOnQueue {
+        dispatchOnQueue { [weak self] in
+            guard let self else {
+                return
+            }
             switch newState {
             case .connected, .completed:
-                reconnectAttempts = 0
-                if state == .reconnecting {
-                    updateStateLocked(.connected, reason: "reconnected")
+                self.reconnectAttempts = 0
+                if self.state == .reconnecting {
+                    self.updateStateLocked(.connected, reason: "reconnected")
                 }
             case .disconnected, .failed:
-                scheduleReconnectLocked(reason: "ice_disconnected")
+                self.scheduleReconnectLocked(reason: "ice_disconnected")
             case .closed:
-                if state == .connected || state == .ready {
-                    scheduleReconnectLocked(reason: "ice_closed")
+                if self.state == .connected || self.state == .ready {
+                    self.scheduleReconnectLocked(reason: "ice_closed")
                 }
             default:
                 break
@@ -1439,29 +1488,38 @@ extension NativeWebRTCController: RTCPeerConnectionDelegate {
     }
 
     public func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
-        syncOnQueue {
+        dispatchOnQueue { [weak self] in
+            guard let self else {
+                return
+            }
             self.dataChannel = dataChannel
             dataChannel.delegate = self
         }
     }
 
     public func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCPeerConnectionState) {
-        syncOnQueue {
+        dispatchOnQueue { [weak self] in
+            guard let self else {
+                return
+            }
             if stateChanged == .failed {
-                scheduleReconnectLocked(reason: "peer_connection_failed")
+                self.scheduleReconnectLocked(reason: "peer_connection_failed")
             }
         }
     }
 
     public func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
-        syncOnQueue {
+        dispatchOnQueue { [weak self] in
+            guard let self else {
+                return
+            }
             if transceiver.mediaType == .audio {
-                if !remoteAudioTrackStarted {
-                    remoteAudioTrackStarted = true
-                    emitTrackEventLocked(eventName: "webrtcTrackStarted", kind: "audio", source: "remote")
+                if !self.remoteAudioTrackStarted {
+                    self.remoteAudioTrackStarted = true
+                    self.emitTrackEventLocked(eventName: "webrtcTrackStarted", kind: "audio", source: "remote")
                 }
             } else if transceiver.mediaType == .video {
-                emitTrackEventLocked(eventName: "webrtcTrackStarted", kind: "video", source: "remote")
+                self.emitTrackEventLocked(eventName: "webrtcTrackStarted", kind: "video", source: "remote")
             }
         }
     }
@@ -1476,13 +1534,16 @@ extension NativeWebRTCController: RTCPeerConnectionDelegate {
 
 extension NativeWebRTCController: RTCDataChannelDelegate {
     public func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        syncOnQueue {
+        dispatchOnQueue { [weak self] in
+            guard let self else {
+                return
+            }
             switch dataChannel.readyState {
             case .open:
-                updateStateLocked(.ready, reason: "data_channel_open")
+                self.updateStateLocked(.ready, reason: "data_channel_open")
             case .closing, .closed:
-                if state == .ready || state == .connected {
-                    scheduleReconnectLocked(reason: "data_channel_closed")
+                if self.state == .ready || self.state == .connected {
+                    self.scheduleReconnectLocked(reason: "data_channel_closed")
                 }
             default:
                 break
@@ -1491,7 +1552,10 @@ extension NativeWebRTCController: RTCDataChannelDelegate {
     }
 
     public func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        syncOnQueue {
+        dispatchOnQueue { [weak self] in
+            guard let self else {
+                return
+            }
             let payloadString: String
             if buffer.isBinary {
                 payloadString = buffer.data.base64EncodedString()
@@ -1502,12 +1566,12 @@ extension NativeWebRTCController: RTCDataChannelDelegate {
             var payload: [String: Any] = [
                 "data": payloadString
             ]
-            if let activeConnectionId {
+            if let activeConnectionId = self.activeConnectionId {
                 payload["connectionId"] = activeConnectionId
             }
 
-            emitEventLocked(name: "webrtcDataMessage", payload: payload)
-            maybeHandleSignallingMessageLocked(payloadString)
+            self.emitEventLocked(name: "webrtcDataMessage", payload: payload)
+            self.maybeHandleSignallingMessageLocked(payloadString)
         }
     }
 
