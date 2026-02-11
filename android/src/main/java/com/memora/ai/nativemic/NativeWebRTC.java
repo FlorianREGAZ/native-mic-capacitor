@@ -853,10 +853,10 @@ public final class NativeWebRTC {
             String signalType = signal.optString("type", "");
             if ("renegotiate".equals(signalType)) {
                 scheduleReconnectLocked("renegotiate_requested");
-            } else if ("peer_left".equals(signalType)) {
+            } else if ("peerLeft".equals(signalType) || "peer_left".equals(signalType)) {
                 try {
                     if (activeConnectionId != null) {
-                        disconnectInternal(activeConnectionId, "peer_left");
+                        disconnectInternal(activeConnectionId, "peerLeft");
                     }
                 } catch (NativeWebRTCControllerError error) {
                     emitErrorLocked(error.code, error.message, error.recoverable, error.nativeCode, activeConnectionId);

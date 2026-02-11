@@ -1371,7 +1371,9 @@ struct NativeWebRTCStateResultModel {
         case "pranswer":
             return .prAnswer
         case "rollback":
-            return .rollback
+            // Some WebRTC iOS SDK versions do not expose RTCSdpType.rollback.
+            // This negotiation flow expects an answer, so fallback safely.
+            return .answer
         default:
             return .answer
         }
@@ -1383,8 +1385,6 @@ struct NativeWebRTCStateResultModel {
             return "offer"
         case .prAnswer:
             return "pranswer"
-        case .rollback:
-            return "rollback"
         case .answer:
             fallthrough
         @unknown default:
@@ -1527,9 +1527,9 @@ extension NativeWebRTCController: RTCDataChannelDelegate {
             return
         }
 
-        if signalType == "peer_left", let activeConnectionId {
+        if (signalType == "peerLeft" || signalType == "peer_left"), let activeConnectionId {
             do {
-                try disconnect(connectionId: activeConnectionId, reason: "peer_left")
+                try disconnect(connectionId: activeConnectionId, reason: "peerLeft")
             } catch {
                 // best effort
             }
