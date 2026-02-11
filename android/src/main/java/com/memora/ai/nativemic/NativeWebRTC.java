@@ -8,6 +8,7 @@ import android.util.Base64;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -925,6 +927,9 @@ public final class NativeWebRTC {
         String sdp = answer.optString("sdp", "");
         String type = answer.optString("type", "answer");
         String pcId = normalizeNullableString(answer.optString("pc_id", null));
+        if (pcId == null) {
+            pcId = normalizeNullableString(answer.optString("pcId", null));
+        }
         if (pcId != null) {
             activePcId = pcId;
         }
@@ -969,6 +974,13 @@ public final class NativeWebRTC {
 
         try {
             return future.get(10, TimeUnit.SECONDS);
+        } catch (TimeoutException timeoutException) {
+            throw new NativeWebRTCControllerError(
+                NativeWebRTCErrorCode.NEGOTIATION_FAILED,
+                "Timed out while creating WebRTC offer.",
+                false,
+                null
+            );
         } catch (Exception exception) {
             throw new NativeWebRTCControllerError(
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
@@ -994,6 +1006,13 @@ public final class NativeWebRTC {
 
         try {
             future.get(10, TimeUnit.SECONDS);
+        } catch (TimeoutException timeoutException) {
+            throw new NativeWebRTCControllerError(
+                NativeWebRTCErrorCode.NEGOTIATION_FAILED,
+                "Timed out while setting local WebRTC description.",
+                false,
+                null
+            );
         } catch (Exception exception) {
             throw new NativeWebRTCControllerError(
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
@@ -1019,6 +1038,13 @@ public final class NativeWebRTC {
 
         try {
             future.get(10, TimeUnit.SECONDS);
+        } catch (TimeoutException timeoutException) {
+            throw new NativeWebRTCControllerError(
+                NativeWebRTCErrorCode.NEGOTIATION_FAILED,
+                "Timed out while setting remote WebRTC description.",
+                false,
+                null
+            );
         } catch (Exception exception) {
             throw new NativeWebRTCControllerError(
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
@@ -1168,6 +1194,9 @@ public final class NativeWebRTC {
 
             return new JSONObject(responseBody);
         } catch (IOException | JSONException exception) {
+            if (exception instanceof InterruptedIOException) {
+                throw new NativeWebRTCControllerError(errorCode, errorMessage, false, "timeout");
+            }
             throw new NativeWebRTCControllerError(
                 errorCode,
                 errorMessage,
