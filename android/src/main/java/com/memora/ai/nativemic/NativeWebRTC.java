@@ -1465,7 +1465,8 @@ public final class NativeWebRTC {
                     break;
                 case SYSTEM:
                 default:
-                    audioManager.setSpeakerphoneOn(false);
+                    audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+                    audioManager.setSpeakerphoneOn(!hasExternalOutputDevice());
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         audioManager.clearCommunicationDevice();
                     }
@@ -1483,7 +1484,7 @@ public final class NativeWebRTC {
 
     private NativeMic.OutputRoute resolveDefaultOutputRoute() {
         if (audioManager == null) {
-            return NativeMic.OutputRoute.RECEIVER;
+            return NativeMic.OutputRoute.SYSTEM;
         }
 
         for (AudioDeviceInfo output : audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
@@ -1505,7 +1506,34 @@ public final class NativeWebRTC {
             }
         }
 
-        return NativeMic.OutputRoute.RECEIVER;
+        return NativeMic.OutputRoute.SYSTEM;
+    }
+
+    private boolean hasExternalOutputDevice() {
+        if (audioManager == null) {
+            return false;
+        }
+
+        for (AudioDeviceInfo output : audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            switch (output.getType()) {
+                case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
+                case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
+                case AudioDeviceInfo.TYPE_BLE_HEADSET:
+                case AudioDeviceInfo.TYPE_BLE_BROADCAST:
+                case AudioDeviceInfo.TYPE_BLE_SPEAKER:
+                case AudioDeviceInfo.TYPE_USB_DEVICE:
+                case AudioDeviceInfo.TYPE_USB_HEADSET:
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                case AudioDeviceInfo.TYPE_LINE_ANALOG:
+                case AudioDeviceInfo.TYPE_LINE_DIGITAL:
+                    return true;
+                default:
+                    break;
+            }
+        }
+
+        return false;
     }
 
     private AudioDeviceInfo findOutputDeviceByType(int type) {
@@ -1666,6 +1694,7 @@ public final class NativeWebRTC {
             activeConnectionId = null;
             activePcId = null;
             preferredInputId = null;
+            selectedOutputRoute = NativeMic.OutputRoute.SYSTEM;
             micEnabled = true;
             reconnectAttempts = 0;
             manualDisconnectRequested = false;
@@ -1918,7 +1947,7 @@ public final class NativeWebRTC {
         boolean startMicEnabled = mediaObject == null || asBoolean(mediaObject.get("startMicEnabled"), true);
         String preferredInputId = mediaObject != null ? normalizeNullableString(asString(mediaObject.get("preferredInputId"))) : null;
 
-        NativeMic.OutputRoute outputRoute = NativeMic.OutputRoute.RECEIVER;
+        NativeMic.OutputRoute outputRoute = NativeMic.OutputRoute.SYSTEM;
         boolean outputRouteExplicit = false;
         if (mediaObject != null && mediaObject.containsKey("outputRoute")) {
             String routeValue = asString(mediaObject.get("outputRoute"));

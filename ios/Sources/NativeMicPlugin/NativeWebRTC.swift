@@ -153,7 +153,7 @@ struct NativeWebRTCStateResultModel {
     private var activeConnectOptions: NativeWebRTCConnectOptionsModel?
     private var activeConnectionId: String?
     private var activePcId: String?
-    private var selectedOutputRoute: OutputRoute = .receiver
+    private var selectedOutputRoute: OutputRoute = .system
     private var preferredInputId: String?
     private var micEnabled = true
 
@@ -1112,23 +1112,31 @@ struct NativeWebRTCStateResultModel {
         previousMode = session.mode
         previousCategoryOptions = session.categoryOptions
 
-        var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP]
-        if selectedOutputRoute != .receiver {
-            options.insert(.defaultToSpeaker)
-        }
-
         let mode: AVAudioSession.Mode = voiceProcessing ? .voiceChat : .default
-        try session.setCategory(.playAndRecord, mode: mode, options: options)
+        try session.setCategory(.playAndRecord, mode: mode, options: categoryOptions(for: selectedOutputRoute))
         try session.setActive(true, options: [])
     }
 
     private func applyOutputRouteLocked(_ route: OutputRoute) throws {
+        if let activeConnectOptions {
+            let mode: AVAudioSession.Mode = activeConnectOptions.media.voiceProcessing ? .voiceChat : .default
+            try session.setCategory(.playAndRecord, mode: mode, options: categoryOptions(for: route))
+        }
+
         switch route {
         case .speaker:
             try session.overrideOutputAudioPort(.speaker)
         case .system, .receiver:
             try session.overrideOutputAudioPort(.none)
         }
+    }
+
+    private func categoryOptions(for route: OutputRoute) -> AVAudioSession.CategoryOptions {
+        var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP]
+        if route != .receiver {
+            options.insert(.defaultToSpeaker)
+        }
+        return options
     }
 
     private func resolveDefaultOutputRoute() -> OutputRoute {
@@ -1142,7 +1150,7 @@ struct NativeWebRTCStateResultModel {
             }
         }
 
-        return .receiver
+        return .system
     }
 
     private func validatePreferredInputLocked(_ preferredInputId: String?) throws {
@@ -1226,7 +1234,7 @@ struct NativeWebRTCStateResultModel {
             activeConnectOptions = nil
             activeConnectionId = nil
             activePcId = nil
-            selectedOutputRoute = .receiver
+            selectedOutputRoute = .system
             preferredInputId = nil
             micEnabled = true
             reconnectAttempts = 0
@@ -1648,7 +1656,7 @@ extension NativeWebRTCController {
         let startMicEnabled = mediaObject?["startMicEnabled"] as? Bool ?? true
         let preferredInputId = normalizeStatic(mediaObject?["preferredInputId"] as? String)
 
-        var outputRoute = OutputRoute.receiver
+        var outputRoute = OutputRoute.system
         var outputRouteExplicit = false
         if let outputRouteValue = mediaObject?["outputRoute"] as? String {
             guard let parsed = OutputRoute(rawValue: outputRouteValue) else {

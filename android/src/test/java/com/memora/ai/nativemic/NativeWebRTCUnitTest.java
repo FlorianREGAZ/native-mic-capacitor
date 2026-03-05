@@ -52,7 +52,7 @@ public class NativeWebRTCUnitTest {
         assertTrue(options.reconnect.enabled);
         assertEquals(3, options.reconnect.maxAttempts);
         assertEquals(2000, options.reconnect.backoffMs);
-        assertEquals(NativeMic.OutputRoute.RECEIVER, options.media.outputRoute);
+        assertEquals(NativeMic.OutputRoute.SYSTEM, options.media.outputRoute);
     }
 
     @Test
