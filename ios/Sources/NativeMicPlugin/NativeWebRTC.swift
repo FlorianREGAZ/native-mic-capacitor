@@ -156,6 +156,7 @@ struct NativeWebRTCStateResultModel {
     private var selectedOutputRoute: OutputRoute = .system
     private var preferredInputId: String?
     private var micEnabled = true
+    private var remoteAudioEnabled = true
 
     private var pendingCandidates: [RTCIceCandidate] = []
     private var canSendIceCandidates = false
@@ -220,6 +221,7 @@ struct NativeWebRTCStateResultModel {
             selectedOutputRoute = options.media.outputRouteExplicit ? options.media.outputRoute : resolveDefaultOutputRoute()
             preferredInputId = options.media.preferredInputId
             micEnabled = options.media.startMicEnabled
+            remoteAudioEnabled = true
             pendingCandidates.removeAll(keepingCapacity: false)
             canSendIceCandidates = false
             reconnectAttempts = 0
@@ -319,6 +321,14 @@ struct NativeWebRTCStateResultModel {
         }
     }
 
+    func setRemoteAudioEnabled(connectionId: String, enabled: Bool) throws {
+        try syncOnQueue {
+            try assertConnectionMatches(connectionId)
+            remoteAudioEnabled = enabled
+            applyRemoteAudioEnabledToRemoteTracksLocked()
+        }
+    }
+
     func setPreferredInput(connectionId: String, inputId: String?) throws {
         try syncOnQueue {
             try assertConnectionMatches(connectionId)
@@ -376,6 +386,7 @@ struct NativeWebRTCStateResultModel {
                 "connectionId": connectionId,
                 "state": state.rawValue,
                 "micEnabled": micEnabled,
+                "remoteAudioEnabled": remoteAudioEnabled,
                 "selectedOutputRoute": selectedOutputRoute.rawValue,
                 "pendingIceCandidates": pendingCandidates.count,
                 "canSendIceCandidates": canSendIceCandidates,
@@ -1189,6 +1200,18 @@ struct NativeWebRTCStateResultModel {
         emitEventLocked(name: "micRouteChanged", payload: payload)
     }
 
+    private func applyRemoteAudioEnabledToRemoteTracksLocked() {
+        guard let peerConnection else {
+            return
+        }
+
+        for transceiver in peerConnection.transceivers where transceiver.mediaType == .audio {
+            if let audioTrack = transceiver.receiver.track as? RTCAudioTrack {
+                audioTrack.isEnabled = remoteAudioEnabled
+            }
+        }
+    }
+
     private func closePeerConnectionOnlyLocked() {
         candidateFlushWorkItem?.cancel()
         candidateFlushWorkItem = nil
@@ -1237,6 +1260,7 @@ struct NativeWebRTCStateResultModel {
             selectedOutputRoute = .system
             preferredInputId = nil
             micEnabled = true
+            remoteAudioEnabled = true
             reconnectAttempts = 0
             manualDisconnectRequested = false
         }
@@ -1522,6 +1546,9 @@ extension NativeWebRTCController: RTCPeerConnectionDelegate {
                 return
             }
             if transceiver.mediaType == .audio {
+                if let audioTrack = transceiver.receiver.track as? RTCAudioTrack {
+                    audioTrack.isEnabled = self.remoteAudioEnabled
+                }
                 if !self.remoteAudioTrackStarted {
                     self.remoteAudioTrackStarted = true
                     self.emitTrackEventLocked(eventName: "webrtcTrackStarted", kind: "audio", source: "remote")

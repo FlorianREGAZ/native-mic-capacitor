@@ -29,6 +29,7 @@ npx cap sync
 * [`webrtcDisconnect(...)`](#webrtcdisconnect)
 * [`webrtcSendDataMessage(...)`](#webrtcsenddatamessage)
 * [`webrtcSetMicEnabled(...)`](#webrtcsetmicenabled)
+* [`webrtcSetRemoteAudioEnabled(...)`](#webrtcsetremoteaudioenabled)
 * [`webrtcSetPreferredInput(...)`](#webrtcsetpreferredinput)
 * [`webrtcSetOutputRoute(...)`](#webrtcsetoutputroute)
 * [`webrtcGetState(...)`](#webrtcgetstate)
@@ -246,6 +247,19 @@ webrtcSendDataMessage(options: { connectionId: string; data: string; }) => Promi
 
 ```typescript
 webrtcSetMicEnabled(options: { connectionId: string; enabled: boolean; }) => Promise<void>
+```
+
+| Param         | Type                                                     |
+| ------------- | -------------------------------------------------------- |
+| **`options`** | <code>{ connectionId: string; enabled: boolean; }</code> |
+
+--------------------
+
+
+### webrtcSetRemoteAudioEnabled(...)
+
+```typescript
+webrtcSetRemoteAudioEnabled(options: { connectionId: string; enabled: boolean; }) => Promise<void>
 ```
 
 | Param         | Type                                                     |

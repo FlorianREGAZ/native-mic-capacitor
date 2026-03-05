@@ -212,6 +212,7 @@ export interface NativeMicPlugin {
   webrtcDisconnect(options: { connectionId: string; reason?: string }): Promise<void>;
   webrtcSendDataMessage(options: { connectionId: string; data: string }): Promise<void>;
   webrtcSetMicEnabled(options: { connectionId: string; enabled: boolean }): Promise<void>;
+  webrtcSetRemoteAudioEnabled(options: { connectionId: string; enabled: boolean }): Promise<void>;
   webrtcSetPreferredInput(options: { connectionId: string; inputId: string | null }): Promise<void>;
   webrtcSetOutputRoute(options: { connectionId: string; route: OutputRoute }): Promise<void>;
   webrtcGetState(options: { connectionId: string }): Promise<NativeWebRTCStateResult>;

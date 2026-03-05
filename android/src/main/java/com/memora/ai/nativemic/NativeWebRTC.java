@@ -329,6 +329,7 @@ public final class NativeWebRTC {
     private String preferredInputId;
     private NativeMic.OutputRoute selectedOutputRoute = NativeMic.OutputRoute.SYSTEM;
     private boolean micEnabled = true;
+    private boolean remoteAudioEnabled = true;
 
     private NativeWebRTCState state = NativeWebRTCState.IDLE;
     private boolean manualDisconnectRequested = false;
@@ -450,6 +451,14 @@ public final class NativeWebRTC {
         });
     }
 
+    public void setRemoteAudioEnabled(String connectionId, boolean enabled) throws NativeWebRTCControllerError {
+        runBlockingVoid(() -> {
+            assertConnectionMatches(connectionId);
+            remoteAudioEnabled = enabled;
+            applyRemoteAudioEnabledToRemoteTracksLocked();
+        });
+    }
+
     public void setPreferredInput(String connectionId, String inputId) throws NativeWebRTCControllerError {
         runBlockingVoid(() -> {
             assertConnectionMatches(connectionId);
@@ -491,6 +500,7 @@ public final class NativeWebRTC {
             diagnostics.put("state", state.wireValue);
             diagnostics.put("pcId", activePcId);
             diagnostics.put("micEnabled", micEnabled);
+            diagnostics.put("remoteAudioEnabled", remoteAudioEnabled);
             diagnostics.put("selectedOutputRoute", selectedOutputRoute.wireValue);
             if (preferredInputId != null) {
                 diagnostics.put("preferredInputId", preferredInputId);
@@ -527,6 +537,7 @@ public final class NativeWebRTC {
         preferredInputId = options.media.preferredInputId;
         selectedOutputRoute = options.media.outputRouteExplicit ? options.media.outputRoute : resolveDefaultOutputRoute();
         micEnabled = options.media.startMicEnabled;
+        remoteAudioEnabled = true;
         reconnectAttempts = 0;
         manualDisconnectRequested = false;
         activePcId = null;
@@ -1305,7 +1316,7 @@ public final class NativeWebRTC {
         }
 
         if (MediaStreamTrack.AUDIO_TRACK_KIND.equals(track.kind())) {
-            track.setEnabled(true);
+            track.setEnabled(remoteAudioEnabled);
             if (!remoteAudioTrackStarted) {
                 remoteAudioTrackStarted = true;
                 emitTrackEventLocked("webrtcTrackStarted", "audio", "remote");
@@ -1315,6 +1326,23 @@ public final class NativeWebRTC {
 
         if (MediaStreamTrack.VIDEO_TRACK_KIND.equals(track.kind())) {
             emitTrackEventLocked("webrtcTrackStarted", "video", "remote");
+        }
+    }
+
+    private void applyRemoteAudioEnabledToRemoteTracksLocked() {
+        if (peerConnection == null) {
+            return;
+        }
+
+        for (RtpTransceiver transceiver : peerConnection.getTransceivers()) {
+            if (transceiver == null || transceiver.getReceiver() == null) {
+                continue;
+            }
+
+            MediaStreamTrack track = transceiver.getReceiver().track();
+            if (track != null && MediaStreamTrack.AUDIO_TRACK_KIND.equals(track.kind())) {
+                track.setEnabled(remoteAudioEnabled);
+            }
         }
     }
 
@@ -1696,6 +1724,7 @@ public final class NativeWebRTC {
             preferredInputId = null;
             selectedOutputRoute = NativeMic.OutputRoute.SYSTEM;
             micEnabled = true;
+            remoteAudioEnabled = true;
             reconnectAttempts = 0;
             manualDisconnectRequested = false;
         }

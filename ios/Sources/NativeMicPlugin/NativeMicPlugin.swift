@@ -22,6 +22,7 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "webrtcDisconnect", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcSendDataMessage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcSetMicEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcSetRemoteAudioEnabled", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcSetPreferredInput", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcSetOutputRoute", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcGetState", returnType: CAPPluginReturnPromise),
@@ -354,6 +355,39 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
 
         do {
             try webRtcController.setMicEnabled(connectionId: connectionId, enabled: enabled)
+            call.resolve()
+        } catch let error as NativeWebRTCControllerError {
+            rejectWebRTC(call, with: error, connectionId: connectionId)
+        } catch {
+            rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
+        }
+    }
+
+    @objc func webrtcSetRemoteAudioEnabled(_ call: CAPPluginCall) {
+        guard let connectionId = call.getString("connectionId"), !connectionId.isEmpty else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "connectionId is required.",
+                recoverable: false,
+                connectionId: nil
+            )
+            return
+        }
+
+        guard let enabled = call.getBool("enabled") else {
+            rejectWebRTC(
+                call,
+                code: .invalidArgument,
+                message: "enabled must be a boolean.",
+                recoverable: false,
+                connectionId: connectionId
+            )
+            return
+        }
+
+        do {
+            try webRtcController.setRemoteAudioEnabled(connectionId: connectionId, enabled: enabled)
             call.resolve()
         } catch let error as NativeWebRTCControllerError {
             rejectWebRTC(call, with: error, connectionId: connectionId)

@@ -380,6 +380,46 @@ public class NativeMicPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void webrtcSetRemoteAudioEnabled(PluginCall call) {
+        String connectionId = call.getString("connectionId");
+        if (connectionId == null || connectionId.isEmpty()) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "connectionId is required.",
+                false,
+                null,
+                null,
+                null
+            );
+            return;
+        }
+
+        Boolean enabled = call.getBoolean("enabled");
+        if (enabled == null) {
+            rejectWebRTC(
+                call,
+                NativeWebRTC.NativeWebRTCErrorCode.INVALID_ARGUMENT,
+                "enabled must be a boolean.",
+                false,
+                connectionId,
+                null,
+                null
+            );
+            return;
+        }
+
+        try {
+            webRtcController.setRemoteAudioEnabled(connectionId, enabled);
+            call.resolve();
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, connectionId);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, connectionId);
+        }
+    }
+
+    @PluginMethod
     public void webrtcSetPreferredInput(PluginCall call) {
         String connectionId = call.getString("connectionId");
         if (connectionId == null || connectionId.isEmpty()) {

@@ -627,6 +627,19 @@ export class NativeMicWeb extends WebPlugin implements NativeMicPlugin {
 		);
 	}
 
+	async webrtcSetRemoteAudioEnabled(options: {
+		connectionId: string;
+		enabled: boolean;
+	}): Promise<void> {
+		const connectionId = this.resolveWebRTCConnectionId(options?.connectionId);
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+			connectionId,
+		);
+	}
+
 	async webrtcSetPreferredInput(options: {
 		connectionId: string;
 		inputId: string | null;
