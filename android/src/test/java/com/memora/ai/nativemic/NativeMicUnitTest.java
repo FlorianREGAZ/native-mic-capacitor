@@ -1,10 +1,12 @@
 package com.memora.ai.nativemic;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import android.media.AudioDeviceInfo;
 import com.getcapacitor.PermissionState;
 import java.util.Arrays;
 import java.util.List;
@@ -54,4 +56,33 @@ public class NativeMicUnitTest {
         assertTrue(converted.length > 0);
         assertTrue(flushed.length >= 0);
     }
+
+    @Test
+    public void systemRoutePrefersSpeakerWhenOnlyBuiltInOutputsExist() {
+        assertTrue(
+            AndroidAudioRouting.shouldUseSpeakerphone(
+                AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(
+                    new int[] { AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+                )
+            )
+        );
+        assertTrue(AndroidAudioRouting.shouldUseSpeakerphone(AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(new int[0])));
+    }
+
+    @Test
+    public void systemRouteDefersToExternalOutputsWhenAvailable() {
+        assertFalse(
+            AndroidAudioRouting.shouldUseSpeakerphone(
+                AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(
+                    new int[] { AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
+                )
+            )
+        );
+        assertFalse(
+            AndroidAudioRouting.shouldUseSpeakerphone(
+                AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(new int[] { AudioDeviceInfo.TYPE_WIRED_HEADSET })
+            )
+        );
+    }
+
 }

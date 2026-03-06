@@ -1,9 +1,11 @@
 package com.memora.ai.nativemic;
 
 import android.content.Context;
+import android.media.AudioAttributes;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Build;
+import android.util.Log;
 import android.util.Base64;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -58,6 +60,8 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public final class NativeWebRTC {
+
+    private static final String ROUTE_LOG_TAG = "NativeWebRTCRoute";
 
     interface EventEmitter {
         void emit(String eventName, JSObject payload);
@@ -347,6 +351,7 @@ public final class NativeWebRTC {
 
     private Integer previousAudioMode;
     private Boolean previousSpeakerphoneEnabled;
+    private JSObject lastRouteDebugSnapshot = new JSObject();
 
     public NativeWebRTC(Context context, EventEmitter eventEmitter) {
         this.appContext = context.getApplicationContext();
@@ -511,6 +516,7 @@ public final class NativeWebRTC {
             diagnostics.put("canSendIceCandidates", canSendIceCandidates);
             diagnostics.put("pendingIceCandidates", pendingCandidates.size());
             diagnostics.put("reconnectAttempts", reconnectAttempts);
+            diagnostics.put("routeDebug", lastRouteDebugSnapshot);
 
             if (peerConnection != null) {
                 diagnostics.put("iceConnectionState", peerConnection.iceConnectionState().name().toLowerCase(Locale.US));
@@ -601,7 +607,44 @@ public final class NativeWebRTC {
 
         try {
             if (audioDeviceModule == null) {
-                audioDeviceModule = JavaAudioDeviceModule.builder(appContext).createAudioDeviceModule();
+                audioDeviceModule =
+                    JavaAudioDeviceModule.builder(appContext)
+                        .setAudioAttributes(
+                            new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        .setAudioTrackStateCallback(
+                            new JavaAudioDeviceModule.AudioTrackStateCallback() {
+                                @Override
+                                public void onWebRtcAudioTrackStart() {
+                                    executor.execute(() ->
+                                        updateRouteDebugSnapshotLocked(
+                                            "webrtc_audio_track_start",
+                                            selectedOutputRoute,
+                                            "audio_track_started",
+                                            null,
+                                            null
+                                        )
+                                    );
+                                }
+
+                                @Override
+                                public void onWebRtcAudioTrackStop() {
+                                    executor.execute(() ->
+                                        updateRouteDebugSnapshotLocked(
+                                            "webrtc_audio_track_stop",
+                                            selectedOutputRoute,
+                                            "audio_track_stopped",
+                                            null,
+                                            null
+                                        )
+                                    );
+                                }
+                            }
+                        )
+                        .createAudioDeviceModule();
             }
 
             DefaultVideoEncoderFactory encoderFactory = new DefaultVideoEncoderFactory(null, false, false);
@@ -1322,6 +1365,7 @@ public final class NativeWebRTC {
             track.setEnabled(remoteAudioEnabled);
             if (!remoteAudioTrackStarted) {
                 remoteAudioTrackStarted = true;
+                updateRouteDebugSnapshotLocked("remote_audio_track_started", selectedOutputRoute, "track_started", null, null);
                 emitTrackEventLocked("webrtcTrackStarted", "audio", "remote");
             }
             return;
@@ -1473,14 +1517,20 @@ public final class NativeWebRTC {
         }
 
         try {
+            String routeOperation = "speakerphone_only";
+            Boolean communicationDeviceApplied = null;
+            AudioDeviceInfo targetDevice = null;
             switch (route) {
                 case SPEAKER:
                     audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                     audioManager.setSpeakerphoneOn(true);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        AudioDeviceInfo speaker = findOutputDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
-                        if (speaker != null) {
-                            audioManager.setCommunicationDevice(speaker);
+                        targetDevice = findCommunicationDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
+                        routeOperation = "set_communication_device";
+                        if (targetDevice != null) {
+                            communicationDeviceApplied = audioManager.setCommunicationDevice(targetDevice);
+                        } else {
+                            routeOperation = "speaker_device_unavailable";
                         }
                     }
                     break;
@@ -1488,21 +1538,38 @@ public final class NativeWebRTC {
                     audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                     audioManager.setSpeakerphoneOn(false);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        AudioDeviceInfo receiver = findOutputDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE);
-                        if (receiver != null) {
-                            audioManager.setCommunicationDevice(receiver);
+                        targetDevice = findCommunicationDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE);
+                        routeOperation = "set_communication_device";
+                        if (targetDevice != null) {
+                            communicationDeviceApplied = audioManager.setCommunicationDevice(targetDevice);
+                        } else {
+                            routeOperation = "receiver_device_unavailable";
                         }
                     }
                     break;
                 case SYSTEM:
                 default:
                     audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
-                    audioManager.setSpeakerphoneOn(!hasExternalOutputDevice());
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        audioManager.clearCommunicationDevice();
+                        targetDevice = findPreferredSystemCommunicationDevice();
+                        audioManager.setSpeakerphoneOn(
+                            targetDevice != null && AndroidAudioRouting.shouldUseSpeakerphone(targetDevice.getType())
+                        );
+                        if (targetDevice != null) {
+                            routeOperation = "set_communication_device";
+                            communicationDeviceApplied = audioManager.setCommunicationDevice(targetDevice);
+                        } else {
+                            routeOperation = "clear_communication_device";
+                            audioManager.clearCommunicationDevice();
+                        }
+                    } else {
+                        int preferredDeviceType = AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(getOutputDeviceTypes());
+                        audioManager.setSpeakerphoneOn(AndroidAudioRouting.shouldUseSpeakerphone(preferredDeviceType));
                     }
                     break;
             }
+            updateRouteDebugSnapshotLocked("apply_output_route", route, routeOperation, targetDevice, communicationDeviceApplied);
+            scheduleRouteDebugSnapshot(route);
         } catch (Exception exception) {
             throw new NativeWebRTCControllerError(
                 NativeWebRTCErrorCode.INTERNAL,
@@ -1540,33 +1607,6 @@ public final class NativeWebRTC {
         return NativeMic.OutputRoute.SYSTEM;
     }
 
-    private boolean hasExternalOutputDevice() {
-        if (audioManager == null) {
-            return false;
-        }
-
-        for (AudioDeviceInfo output : audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-            switch (output.getType()) {
-                case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
-                case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
-                case AudioDeviceInfo.TYPE_BLE_HEADSET:
-                case AudioDeviceInfo.TYPE_BLE_BROADCAST:
-                case AudioDeviceInfo.TYPE_BLE_SPEAKER:
-                case AudioDeviceInfo.TYPE_USB_DEVICE:
-                case AudioDeviceInfo.TYPE_USB_HEADSET:
-                case AudioDeviceInfo.TYPE_WIRED_HEADSET:
-                case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
-                case AudioDeviceInfo.TYPE_LINE_ANALOG:
-                case AudioDeviceInfo.TYPE_LINE_DIGITAL:
-                    return true;
-                default:
-                    break;
-            }
-        }
-
-        return false;
-    }
-
     private AudioDeviceInfo findOutputDeviceByType(int type) {
         if (audioManager == null) {
             return null;
@@ -1581,7 +1621,64 @@ public final class NativeWebRTC {
         return null;
     }
 
+    private AudioDeviceInfo findCommunicationDeviceByType(int type) {
+        if (audioManager == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return null;
+        }
+
+        for (AudioDeviceInfo device : audioManager.getAvailableCommunicationDevices()) {
+            if (device.getType() == type) {
+                return device;
+            }
+        }
+
+        return null;
+    }
+
+    private int[] getOutputDeviceTypes() {
+        if (audioManager == null) {
+            return new int[0];
+        }
+
+        AudioDeviceInfo[] outputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        int[] outputDeviceTypes = new int[outputDevices.length];
+        for (int index = 0; index < outputDevices.length; index += 1) {
+            outputDeviceTypes[index] = outputDevices[index].getType();
+        }
+        return outputDeviceTypes;
+    }
+
+    private AudioDeviceInfo findPreferredSystemCommunicationDevice() {
+        if (audioManager == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return null;
+        }
+
+        List<AudioDeviceInfo> availableDevices = audioManager.getAvailableCommunicationDevices();
+        int[] availableDeviceTypes = new int[availableDevices.size()];
+        for (int index = 0; index < availableDevices.size(); index += 1) {
+            availableDeviceTypes[index] = availableDevices.get(index).getType();
+        }
+
+        int preferredDeviceType = AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(availableDeviceTypes);
+        return findCommunicationDeviceByType(preferredDeviceType);
+    }
+
+    private void scheduleRouteDebugSnapshot(NativeMic.OutputRoute route) {
+        scheduleRouteDebugSnapshot(route, 500);
+        scheduleRouteDebugSnapshot(route, 2_000);
+        scheduleRouteDebugSnapshot(route, 5_000);
+    }
+
+    private void scheduleRouteDebugSnapshot(NativeMic.OutputRoute route, long delayMs) {
+        executor.schedule(
+            () -> updateRouteDebugSnapshotLocked("delayed_route_probe_" + delayMs + "ms", route, "probe", null, null),
+            delayMs,
+            TimeUnit.MILLISECONDS
+        );
+    }
+
     private void emitRouteChangedLocked(String reason) {
+        updateRouteDebugSnapshotLocked("emit_route_changed", selectedOutputRoute, reason, null, null);
         JSObject payload = new JSObject();
         payload.put("connectionId", activeConnectionId);
         payload.put("reason", reason);
@@ -1590,8 +1687,102 @@ public final class NativeWebRTC {
         if (selectedInputId != null) {
             payload.put("selectedInputId", selectedInputId);
         }
+        payload.put("routeDebug", lastRouteDebugSnapshot);
 
         emitEventLocked("micRouteChanged", payload);
+    }
+
+    private void updateRouteDebugSnapshotLocked(
+        String source,
+        NativeMic.OutputRoute route,
+        String routeOperation,
+        AudioDeviceInfo targetDevice,
+        Boolean communicationDeviceApplied
+    ) {
+        JSObject snapshot = new JSObject();
+        snapshot.put("source", source);
+        snapshot.put("requestedRoute", route != null ? route.wireValue : null);
+        snapshot.put("routeOperation", routeOperation);
+        snapshot.put("sdkInt", Build.VERSION.SDK_INT);
+        snapshot.put("audioMode", audioManager != null ? audioManager.getMode() : -1);
+        snapshot.put("speakerphoneOn", audioManager != null && audioManager.isSpeakerphoneOn());
+
+        if (targetDevice != null) {
+            snapshot.put("targetCommunicationDevice", describeDevice(targetDevice));
+        }
+        if (communicationDeviceApplied != null) {
+            snapshot.put("setCommunicationDeviceApplied", communicationDeviceApplied);
+        }
+        if (audioManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AudioDeviceInfo currentCommunicationDevice = audioManager.getCommunicationDevice();
+            if (currentCommunicationDevice != null) {
+                snapshot.put("currentCommunicationDevice", describeDevice(currentCommunicationDevice));
+            }
+            snapshot.put("availableCommunicationDevices", describeDevices(audioManager.getAvailableCommunicationDevices()));
+        }
+
+        snapshot.put(
+            "availableOutputDevices",
+            describeDevices(audioManager != null ? audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS) : new AudioDeviceInfo[0])
+        );
+        lastRouteDebugSnapshot = snapshot;
+        Log.d(ROUTE_LOG_TAG, snapshot.toString());
+    }
+
+    private JSArray describeDevices(List<AudioDeviceInfo> devices) {
+        JSArray array = new JSArray();
+        for (AudioDeviceInfo device : devices) {
+            array.put(describeDevice(device));
+        }
+        return array;
+    }
+
+    private JSArray describeDevices(AudioDeviceInfo[] devices) {
+        JSArray array = new JSArray();
+        for (AudioDeviceInfo device : devices) {
+            array.put(describeDevice(device));
+        }
+        return array;
+    }
+
+    private JSObject describeDevice(AudioDeviceInfo device) {
+        JSObject object = new JSObject();
+        object.put("id", device.getId());
+        object.put("type", device.getType());
+        object.put("typeName", describeDeviceType(device.getType()));
+        object.put("label", device.getProductName() != null ? device.getProductName().toString() : null);
+        object.put("isSink", device.isSink());
+        object.put("isSource", device.isSource());
+        return object;
+    }
+
+    private String describeDeviceType(int deviceType) {
+        switch (deviceType) {
+            case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER:
+                return "built_in_speaker";
+            case AudioDeviceInfo.TYPE_BUILTIN_EARPIECE:
+                return "built_in_earpiece";
+            case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
+                return "bluetooth_a2dp";
+            case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
+                return "bluetooth_sco";
+            case AudioDeviceInfo.TYPE_BLE_HEADSET:
+                return "ble_headset";
+            case AudioDeviceInfo.TYPE_BLE_BROADCAST:
+                return "ble_broadcast";
+            case AudioDeviceInfo.TYPE_BLE_SPEAKER:
+                return "ble_speaker";
+            case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                return "wired_headset";
+            case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                return "wired_headphones";
+            case AudioDeviceInfo.TYPE_USB_DEVICE:
+                return "usb_device";
+            case AudioDeviceInfo.TYPE_USB_HEADSET:
+                return "usb_headset";
+            default:
+                return "type_" + deviceType;
+        }
     }
 
     private String resolveSelectedInputIdLocked() {
