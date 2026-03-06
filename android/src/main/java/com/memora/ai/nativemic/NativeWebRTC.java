@@ -448,6 +448,9 @@ public final class NativeWebRTC {
 
             micEnabled = enabled;
             localAudioTrack.setEnabled(enabled);
+            if (enabled) {
+                bindLocalAudioTrackLocked();
+            }
         });
     }
 

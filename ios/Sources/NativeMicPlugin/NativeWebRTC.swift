@@ -318,6 +318,9 @@ struct NativeWebRTCStateResultModel {
 
             micEnabled = enabled
             localAudioTrack.isEnabled = enabled
+            if enabled {
+                bindLocalAudioTrackLocked()
+            }
         }
     }
 
