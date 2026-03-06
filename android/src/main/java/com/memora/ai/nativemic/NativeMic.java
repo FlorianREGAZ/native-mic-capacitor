@@ -12,7 +12,6 @@ import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import android.util.Base64;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -30,8 +29,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class NativeMic {
-
-    private static final String ROUTE_LOG_TAG = "NativeMicRoute";
 
     interface EventEmitter {
         void emit(String eventName, JSObject payload);
@@ -559,14 +556,11 @@ public final class NativeMic {
     private Boolean previousSpeakerphoneEnabled;
 
     private final AudioDeviceCallback audioDeviceCallback;
-    private final Handler mainHandler;
-    private JSObject lastRouteDebugSnapshot = new JSObject();
 
     public NativeMic(Context context, EventEmitter eventEmitter) {
         this.appContext = context.getApplicationContext();
         this.audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
         this.eventEmitter = eventEmitter;
-        this.mainHandler = new Handler(Looper.getMainLooper());
 
         this.audioFocusChangeListener = (focusChange) -> {
             synchronized (lock) {
@@ -924,7 +918,6 @@ public final class NativeMic {
             diagnostics.put("inputRingBufferedFrames", 0);
             diagnostics.put("mediaServicesResetCount", mediaServicesResetCount);
             diagnostics.put("lastRouteChangeReason", lastRouteChangeReason);
-            diagnostics.put("routeDebug", lastRouteDebugSnapshot);
 
             if (activeCaptureId != null) {
                 diagnostics.put("captureId", activeCaptureId);
@@ -1163,20 +1156,14 @@ public final class NativeMic {
         }
 
         try {
-            String routeOperation = "speakerphone_only";
-            Boolean communicationDeviceApplied = null;
-            AudioDeviceInfo targetDevice = null;
             switch (route) {
                 case SPEAKER:
                     audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                     audioManager.setSpeakerphoneOn(true);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        targetDevice = findCommunicationDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
-                        routeOperation = "set_communication_device";
-                        if (targetDevice != null) {
-                            communicationDeviceApplied = audioManager.setCommunicationDevice(targetDevice);
-                        } else {
-                            routeOperation = "speaker_device_unavailable";
+                        AudioDeviceInfo speaker = findCommunicationDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
+                        if (speaker != null) {
+                            audioManager.setCommunicationDevice(speaker);
                         }
                     }
                     break;
@@ -1184,12 +1171,9 @@ public final class NativeMic {
                     audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                     audioManager.setSpeakerphoneOn(false);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        targetDevice = findCommunicationDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE);
-                        routeOperation = "set_communication_device";
-                        if (targetDevice != null) {
-                            communicationDeviceApplied = audioManager.setCommunicationDevice(targetDevice);
-                        } else {
-                            routeOperation = "receiver_device_unavailable";
+                        AudioDeviceInfo receiver = findCommunicationDeviceByType(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE);
+                        if (receiver != null) {
+                            audioManager.setCommunicationDevice(receiver);
                         }
                     }
                     break;
@@ -1201,15 +1185,13 @@ public final class NativeMic {
                         audioManager.setMode(AudioManager.MODE_NORMAL);
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        targetDevice = findPreferredSystemCommunicationDevice();
+                        AudioDeviceInfo targetDevice = findPreferredSystemCommunicationDevice();
                         audioManager.setSpeakerphoneOn(
                             targetDevice != null && AndroidAudioRouting.shouldUseSpeakerphone(targetDevice.getType())
                         );
                         if (targetDevice != null) {
-                            routeOperation = "set_communication_device";
-                            communicationDeviceApplied = audioManager.setCommunicationDevice(targetDevice);
+                            audioManager.setCommunicationDevice(targetDevice);
                         } else {
-                            routeOperation = "clear_communication_device";
                             audioManager.clearCommunicationDevice();
                         }
                     } else {
@@ -1218,8 +1200,6 @@ public final class NativeMic {
                     }
                     break;
             }
-            updateRouteDebugSnapshotLocked("apply_output_route", route, routeOperation, targetDevice, communicationDeviceApplied);
-            scheduleRouteDebugSnapshot(route);
         } catch (Exception exception) {
             throw new NativeMicControllerError(
                 NativeMicErrorCode.ROUTE_CHANGE_FAILED,
@@ -1409,7 +1389,6 @@ public final class NativeMic {
 
     private void emitRouteChangedLocked(String reason) {
         lastRouteChangeReason = reason;
-        updateRouteDebugSnapshotLocked("emit_route_changed", selectedOutputRoute, reason, null, null);
 
         JSObject payload = new JSObject();
         payload.put("reason", reason);
@@ -1421,91 +1400,8 @@ public final class NativeMic {
         if (selectedInputId != null) {
             payload.put("selectedInputId", selectedInputId);
         }
-        payload.put("routeDebug", lastRouteDebugSnapshot);
 
         emitEventLocked("micRouteChanged", payload);
-    }
-
-    private void updateRouteDebugSnapshotLocked(
-        String source,
-        OutputRoute route,
-        String routeOperation,
-        AudioDeviceInfo targetDevice,
-        Boolean communicationDeviceApplied
-    ) {
-        JSObject snapshot = new JSObject();
-        snapshot.put("source", source);
-        snapshot.put("requestedRoute", route != null ? route.wireValue : null);
-        snapshot.put("routeOperation", routeOperation);
-        snapshot.put("sdkInt", Build.VERSION.SDK_INT);
-        snapshot.put("audioMode", audioManager != null ? audioManager.getMode() : -1);
-        snapshot.put("speakerphoneOn", audioManager != null && audioManager.isSpeakerphoneOn());
-
-        if (targetDevice != null) {
-            snapshot.put("targetCommunicationDevice", describeDevice(targetDevice));
-        }
-        if (communicationDeviceApplied != null) {
-            snapshot.put("setCommunicationDeviceApplied", communicationDeviceApplied);
-        }
-        if (audioManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            AudioDeviceInfo currentCommunicationDevice = audioManager.getCommunicationDevice();
-            if (currentCommunicationDevice != null) {
-                snapshot.put("currentCommunicationDevice", describeDevice(currentCommunicationDevice));
-            }
-            snapshot.put("availableCommunicationDevices", describeDevices(audioManager.getAvailableCommunicationDevices()));
-        }
-
-        snapshot.put("availableOutputDevices", describeDevices(Arrays.asList(getOutputDevices())));
-        lastRouteDebugSnapshot = snapshot;
-        Log.d(ROUTE_LOG_TAG, snapshot.toString());
-    }
-
-    private JSArray describeDevices(List<AudioDeviceInfo> devices) {
-        JSArray array = new JSArray();
-        for (AudioDeviceInfo device : devices) {
-            array.put(describeDevice(device));
-        }
-        return array;
-    }
-
-    private JSObject describeDevice(AudioDeviceInfo device) {
-        JSObject object = new JSObject();
-        object.put("id", device.getId());
-        object.put("type", device.getType());
-        object.put("typeName", describeDeviceType(device.getType()));
-        object.put("label", device.getProductName() != null ? device.getProductName().toString() : null);
-        object.put("isSink", device.isSink());
-        object.put("isSource", device.isSource());
-        return object;
-    }
-
-    private String describeDeviceType(int deviceType) {
-        switch (deviceType) {
-            case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER:
-                return "built_in_speaker";
-            case AudioDeviceInfo.TYPE_BUILTIN_EARPIECE:
-                return "built_in_earpiece";
-            case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
-                return "bluetooth_a2dp";
-            case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
-                return "bluetooth_sco";
-            case AudioDeviceInfo.TYPE_BLE_HEADSET:
-                return "ble_headset";
-            case AudioDeviceInfo.TYPE_BLE_BROADCAST:
-                return "ble_broadcast";
-            case AudioDeviceInfo.TYPE_BLE_SPEAKER:
-                return "ble_speaker";
-            case AudioDeviceInfo.TYPE_WIRED_HEADSET:
-                return "wired_headset";
-            case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
-                return "wired_headphones";
-            case AudioDeviceInfo.TYPE_USB_DEVICE:
-                return "usb_device";
-            case AudioDeviceInfo.TYPE_USB_HEADSET:
-                return "usb_headset";
-            default:
-                return "type_" + deviceType;
-        }
     }
 
     private void emitErrorLocked(NativeMicErrorCode code, String message, boolean recoverable, String nativeCode, String captureId) {
@@ -1695,17 +1591,6 @@ public final class NativeMic {
 
         int preferredDeviceType = AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(availableDeviceTypes);
         return findCommunicationDeviceByType(preferredDeviceType);
-    }
-
-    private void scheduleRouteDebugSnapshot(OutputRoute route) {
-        mainHandler.postDelayed(
-            () -> {
-                synchronized (lock) {
-                    updateRouteDebugSnapshotLocked("delayed_route_probe", route, "probe", null, null);
-                }
-            },
-            500
-        );
     }
 
     private int resolveInputSampleRate() {
