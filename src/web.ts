@@ -601,6 +601,14 @@ export class NativeMicWeb extends WebPlugin implements NativeMicPlugin {
 		);
 	}
 
+	async webrtcForceReset(_options?: { reason?: string }): Promise<void> {
+		this.rejectWebRTC(
+			"E_WEBRTC_UNAVAILABLE",
+			"Native WebRTC is not implemented on web.",
+			false,
+		);
+	}
+
 	async webrtcSendDataMessage(options: {
 		connectionId: string;
 		data: string;

@@ -26,7 +26,7 @@ class NativeMicTests: XCTestCase {
         XCTAssertTrue(options.reconnect.enabled)
         XCTAssertEqual(options.reconnect.maxAttempts, 3)
         XCTAssertEqual(options.reconnect.backoffMs, 2_000)
-        XCTAssertEqual(options.media.outputRoute, .receiver)
+        XCTAssertEqual(options.media.outputRoute, .system)
         XCTAssertTrue(options.media.voiceProcessing)
     }
 
@@ -60,5 +60,45 @@ class NativeMicTests: XCTestCase {
         XCTAssertNil(NativeWebRTCController.parseNullableCodec(nil))
         XCTAssertNil(NativeWebRTCController.parseNullableCodec("default"))
         XCTAssertEqual(NativeWebRTCController.parseNullableCodec("opus"), "opus")
+    }
+
+    func testWebRTCCanStartConnectionFromIdleAndError() {
+        XCTAssertTrue(NativeWebRTCController.canStartConnection(from: .idle))
+        XCTAssertTrue(NativeWebRTCController.canStartConnection(from: .error))
+        XCTAssertFalse(NativeWebRTCController.canStartConnection(from: .connected))
+    }
+
+    func testWebRTCShouldResetBeforeConnectForStaleOrErrorState() {
+        XCTAssertTrue(
+            NativeWebRTCController.shouldResetBeforeConnect(
+                from: .error,
+                hasActiveConnectionIdentity: true
+            )
+        )
+        XCTAssertTrue(
+            NativeWebRTCController.shouldResetBeforeConnect(
+                from: .idle,
+                hasActiveConnectionIdentity: true
+            )
+        )
+        XCTAssertFalse(
+            NativeWebRTCController.shouldResetBeforeConnect(
+                from: .idle,
+                hasActiveConnectionIdentity: false
+            )
+        )
+        XCTAssertFalse(
+            NativeWebRTCController.shouldResetBeforeConnect(
+                from: .connected,
+                hasActiveConnectionIdentity: true
+            )
+        )
+    }
+
+    func testWebRTCDisconnectAndDiagnosticsAllowedFromError() {
+        XCTAssertTrue(NativeWebRTCController.canDisconnect(from: .error))
+        XCTAssertTrue(NativeWebRTCController.canInspectConnection(from: .error))
+        XCTAssertFalse(NativeWebRTCController.canDisconnect(from: .idle))
+        XCTAssertFalse(NativeWebRTCController.canInspectConnection(from: .idle))
     }
 }

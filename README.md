@@ -27,6 +27,7 @@ npx cap sync
 * [`webrtcIsAvailable()`](#webrtcisavailable)
 * [`webrtcConnect(...)`](#webrtcconnect)
 * [`webrtcDisconnect(...)`](#webrtcdisconnect)
+* [`webrtcForceReset(...)`](#webrtcforcereset)
 * [`webrtcSendDataMessage(...)`](#webrtcsenddatamessage)
 * [`webrtcSetMicEnabled(...)`](#webrtcsetmicenabled)
 * [`webrtcSetRemoteAudioEnabled(...)`](#webrtcsetremoteaudioenabled)
@@ -226,6 +227,19 @@ webrtcDisconnect(options: { connectionId: string; reason?: string; }) => Promise
 | Param         | Type                                                    |
 | ------------- | ------------------------------------------------------- |
 | **`options`** | <code>{ connectionId: string; reason?: string; }</code> |
+
+--------------------
+
+
+### webrtcForceReset(...)
+
+```typescript
+webrtcForceReset(options?: { reason?: string | undefined; } | undefined) => Promise<void>
+```
+
+| Param         | Type                              |
+| ------------- | --------------------------------- |
+| **`options`** | <code>{ reason?: string; }</code> |
 
 --------------------
 

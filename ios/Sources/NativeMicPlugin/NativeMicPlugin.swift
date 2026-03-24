@@ -20,6 +20,7 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "webrtcIsAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcConnect", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcDisconnect", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "webrtcForceReset", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcSendDataMessage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcSetMicEnabled", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "webrtcSetRemoteAudioEnabled", returnType: CAPPluginReturnPromise),
@@ -295,6 +296,11 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
         } catch {
             rejectUnexpectedWebRTC(call, error: error, connectionId: connectionId)
         }
+    }
+
+    @objc func webrtcForceReset(_ call: CAPPluginCall) {
+        webRtcController.forceReset(reason: call.getString("reason"))
+        call.resolve()
     }
 
     @objc func webrtcSendDataMessage(_ call: CAPPluginCall) {

@@ -183,6 +183,29 @@ struct NativeWebRTCStateResultModel {
         RTCInitializeSSL()
     }
 
+    static func canStartConnection(from state: NativeWebRTCState) -> Bool {
+        state == .idle || state == .error
+    }
+
+    static func shouldResetBeforeConnect(
+        from state: NativeWebRTCState,
+        hasActiveConnectionIdentity: Bool
+    ) -> Bool {
+        state == .error || (state == .idle && hasActiveConnectionIdentity)
+    }
+
+    static func canDisconnect(from state: NativeWebRTCState) -> Bool {
+        state != .idle
+    }
+
+    static func canInspectConnection(from state: NativeWebRTCState) -> Bool {
+        state != .idle
+    }
+
+    private func log(_ message: String) {
+        NSLog("[NativeWebRTC] %@", message)
+    }
+
     deinit {
         syncOnQueue {
             cleanupConnectionLocked(resetIdentity: true, reason: "deinit")
@@ -203,7 +226,21 @@ struct NativeWebRTCStateResultModel {
 
     func connect(options: NativeWebRTCConnectOptionsModel) throws -> NativeWebRTCConnectResultModel {
         try syncOnQueue {
-            if state != .idle {
+            log(
+                "connect requested connectionId=\(options.connectionId) state=\(state.rawValue) reconnectEnabled=\(options.reconnect.enabled) reconnectAttempts=\(reconnectAttempts)"
+            )
+            if Self.shouldResetBeforeConnect(
+                from: state,
+                hasActiveConnectionIdentity: activeConnectionId != nil
+            ) {
+                log(
+                    "connect performing stale-state cleanup state=\(state.rawValue) activeConnectionId=\(activeConnectionId ?? "nil")"
+                )
+                cleanupConnectionLocked(resetIdentity: true, reason: "stale_state_before_connect")
+            }
+
+            if !Self.canStartConnection(from: state) {
+                log("connect rejected because controller is not idle state=\(state.rawValue) activeConnectionId=\(activeConnectionId ?? "nil")")
                 throw NativeWebRTCControllerError(
                     code: .alreadyRunning,
                     message: "A WebRTC connection is already running.",
@@ -249,6 +286,10 @@ struct NativeWebRTCStateResultModel {
                 updateStateLocked(.connected, reason: "remote_description_set")
             }
 
+            log(
+                "connect completed connectionId=\(options.connectionId) state=\(state.rawValue) pcId=\(activePcId ?? "nil") selectedInputId=\(resolveSelectedInputIdLocked() ?? "nil")"
+            )
+
             return NativeWebRTCConnectResultModel(
                 connectionId: options.connectionId,
                 pcId: activePcId,
@@ -261,17 +302,49 @@ struct NativeWebRTCStateResultModel {
 
     func disconnect(connectionId: String, reason: String?) throws {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            log(
+                "disconnect requested connectionId=\(connectionId) reason=\(normalize(reason) ?? "disconnect") state=\(state.rawValue) activeConnectionId=\(activeConnectionId ?? "nil")"
+            )
+            try assertDisconnectableConnectionMatches(connectionId)
             manualDisconnectRequested = true
             updateStateLocked(.disconnecting, reason: normalize(reason) ?? "disconnect")
-            cleanupConnectionLocked(resetIdentity: true, reason: normalize(reason) ?? "disconnect")
+            cleanupConnectionLocked(
+                resetIdentity: true,
+                reason: normalize(reason) ?? "disconnect",
+                emitIdleTransition: false
+            )
             updateStateLocked(.idle, reason: "disconnect_complete")
+        }
+    }
+
+    func forceReset(reason: String?) {
+        syncOnQueue {
+            let normalizedReason = normalize(reason) ?? "force_reset"
+            let hasResidualState =
+                state != .idle ||
+                activeConnectionId != nil ||
+                activePcId != nil ||
+                peerConnection != nil ||
+                dataChannel != nil ||
+                previousCategory != nil ||
+                previousMode != nil
+            log(
+                "forceReset requested reason=\(normalizedReason) state=\(state.rawValue) activeConnectionId=\(activeConnectionId ?? "nil") hasResidualState=\(hasResidualState)"
+            )
+            if !hasResidualState {
+                return
+            }
+            cleanupConnectionLocked(
+                resetIdentity: true,
+                reason: normalizedReason,
+                emitIdleTransition: state != .idle || activeConnectionId != nil || activePcId != nil
+            )
         }
     }
 
     func sendDataMessage(connectionId: String, data: String) throws {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            try assertOperationalConnectionMatches(connectionId)
 
             guard let dataChannel, dataChannel.readyState == .open else {
                 throw NativeWebRTCControllerError(
@@ -305,7 +378,7 @@ struct NativeWebRTCStateResultModel {
 
     func setMicEnabled(connectionId: String, enabled: Bool) throws {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            try assertOperationalConnectionMatches(connectionId)
 
             guard let localAudioTrack else {
                 throw NativeWebRTCControllerError(
@@ -326,7 +399,7 @@ struct NativeWebRTCStateResultModel {
 
     func setRemoteAudioEnabled(connectionId: String, enabled: Bool) throws {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            try assertOperationalConnectionMatches(connectionId)
             remoteAudioEnabled = enabled
             applyRemoteAudioEnabledToRemoteTracksLocked()
         }
@@ -334,7 +407,7 @@ struct NativeWebRTCStateResultModel {
 
     func setPreferredInput(connectionId: String, inputId: String?) throws {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            try assertOperationalConnectionMatches(connectionId)
 
             preferredInputId = normalize(inputId)
             try validatePreferredInputLocked(preferredInputId)
@@ -359,7 +432,7 @@ struct NativeWebRTCStateResultModel {
 
     func setOutputRoute(connectionId: String, route: OutputRoute) throws {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            try assertOperationalConnectionMatches(connectionId)
 
             selectedOutputRoute = route
             try applyOutputRouteLocked(route)
@@ -369,7 +442,7 @@ struct NativeWebRTCStateResultModel {
 
     func getState(connectionId: String) throws -> NativeWebRTCStateResultModel {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            try assertInspectableConnectionMatches(connectionId)
 
             return NativeWebRTCStateResultModel(
                 connectionId: connectionId,
@@ -383,7 +456,7 @@ struct NativeWebRTCStateResultModel {
 
     func getDiagnostics(connectionId: String) throws -> [String: Any] {
         try syncOnQueue {
-            try assertConnectionMatches(connectionId)
+            try assertInspectableConnectionMatches(connectionId)
 
             var diagnostics: [String: Any] = [
                 "connectionId": connectionId,
@@ -1029,8 +1102,15 @@ struct NativeWebRTCStateResultModel {
 
     private func scheduleReconnectLocked(reason: String) {
         guard let activeConnectOptions, !manualDisconnectRequested, activeConnectionId != nil else {
+            log(
+                "scheduleReconnect skipped reason=\(reason) state=\(state.rawValue) manualDisconnectRequested=\(manualDisconnectRequested) activeConnectionId=\(activeConnectionId ?? "nil")"
+            )
             return
         }
+
+        log(
+            "scheduleReconnect reason=\(reason) state=\(state.rawValue) attempt=\(reconnectAttempts + 1)/\(activeConnectOptions.reconnect.maxAttempts) connectionId=\(activeConnectionId ?? "nil")"
+        )
 
         if !activeConnectOptions.reconnect.enabled {
             updateStateLocked(.error, reason: reason)
@@ -1103,8 +1183,13 @@ struct NativeWebRTCStateResultModel {
 
     private func performReconnectLocked() throws {
         guard let activeConnectOptions else {
+            log("performReconnect skipped because activeConnectOptions is nil")
             return
         }
+
+        log(
+            "performReconnect starting state=\(state.rawValue) attempt=\(reconnectAttempts) connectionId=\(activeConnectionId ?? "nil")"
+        )
 
         closePeerConnectionOnlyLocked()
         pendingCandidates.removeAll(keepingCapacity: false)
@@ -1119,6 +1204,9 @@ struct NativeWebRTCStateResultModel {
         canSendIceCandidates = true
         flushIceCandidatesLocked()
         updateStateLocked(.connected, reason: "reconnected")
+        log(
+            "performReconnect completed state=\(state.rawValue) connectionId=\(activeConnectionId ?? "nil") pcId=\(activePcId ?? "nil")"
+        )
     }
 
     private func configureAudioSessionLocked(voiceProcessing: Bool) throws {
@@ -1252,7 +1340,14 @@ struct NativeWebRTCStateResultModel {
         canSendIceCandidates = false
     }
 
-    private func cleanupConnectionLocked(resetIdentity: Bool, reason: String) {
+    private func cleanupConnectionLocked(
+        resetIdentity: Bool,
+        reason: String,
+        emitIdleTransition: Bool = true
+    ) {
+        log(
+            "cleanupConnection resetIdentity=\(resetIdentity) reason=\(reason) emitIdleTransition=\(emitIdleTransition) state=\(state.rawValue) activeConnectionId=\(activeConnectionId ?? "nil")"
+        )
         closePeerConnectionOnlyLocked()
         teardownAudioSessionLocked()
 
@@ -1268,7 +1363,7 @@ struct NativeWebRTCStateResultModel {
             manualDisconnectRequested = false
         }
 
-        if state != .idle {
+        if emitIdleTransition && state != .idle {
             updateStateLocked(.idle, reason: reason)
         }
     }
@@ -1294,24 +1389,65 @@ struct NativeWebRTCStateResultModel {
         peerConnectionFactory = nil
     }
 
-    private func assertConnectionMatches(_ connectionId: String) throws {
+    private func assertActiveConnectionIdentityMatches(_ connectionId: String) throws {
         guard
             let normalized = normalize(connectionId),
             let activeConnectionId,
-            activeConnectionId == normalized,
-            state != .idle,
-            state != .error
+            activeConnectionId == normalized
         else {
-            throw NativeWebRTCControllerError(
-                code: .notRunning,
-                message: "No active WebRTC connection matches \(connectionId).",
-                recoverable: false,
-                nativeCode: nil
+            log(
+                "assertActiveConnectionIdentityMatches failed requestedConnectionId=\(connectionId) normalized=\(normalize(connectionId) ?? "nil") activeConnectionId=\(activeConnectionId ?? "nil") state=\(state.rawValue)"
             )
+            throw notRunningError(connectionId)
         }
     }
 
+    private func assertOperationalConnectionMatches(_ connectionId: String) throws {
+        try assertActiveConnectionIdentityMatches(connectionId)
+
+        guard state != .idle, state != .error else {
+            log(
+                "assertOperationalConnectionMatches failed requestedConnectionId=\(connectionId) activeConnectionId=\(activeConnectionId ?? "nil") state=\(state.rawValue)"
+            )
+            throw notRunningError(connectionId)
+        }
+    }
+
+    private func assertDisconnectableConnectionMatches(_ connectionId: String) throws {
+        try assertActiveConnectionIdentityMatches(connectionId)
+
+        guard Self.canDisconnect(from: state) else {
+            log(
+                "assertDisconnectableConnectionMatches failed requestedConnectionId=\(connectionId) activeConnectionId=\(activeConnectionId ?? "nil") state=\(state.rawValue)"
+            )
+            throw notRunningError(connectionId)
+        }
+    }
+
+    private func assertInspectableConnectionMatches(_ connectionId: String) throws {
+        try assertActiveConnectionIdentityMatches(connectionId)
+
+        guard Self.canInspectConnection(from: state) else {
+            log(
+                "assertInspectableConnectionMatches failed requestedConnectionId=\(connectionId) activeConnectionId=\(activeConnectionId ?? "nil") state=\(state.rawValue)"
+            )
+            throw notRunningError(connectionId)
+        }
+    }
+
+    private func notRunningError(_ connectionId: String) -> NativeWebRTCControllerError {
+        NativeWebRTCControllerError(
+            code: .notRunning,
+            message: "No active WebRTC connection matches \(connectionId).",
+            recoverable: false,
+            nativeCode: nil
+        )
+    }
+
     private func updateStateLocked(_ nextState: NativeWebRTCState, reason: String) {
+        log(
+            "state \(state.rawValue) -> \(nextState.rawValue) reason=\(reason) connectionId=\(activeConnectionId ?? "nil") pcId=\(activePcId ?? "nil") reconnectAttempts=\(reconnectAttempts)"
+        )
         state = nextState
 
         var payload: [String: Any] = [
@@ -1349,6 +1485,9 @@ struct NativeWebRTCStateResultModel {
         nativeCode: String?,
         connectionId: String?
     ) {
+        log(
+            "emitError code=\(code.rawValue) message=\(message) recoverable=\(recoverable) nativeCode=\(nativeCode ?? "nil") connectionId=\(connectionId ?? "nil") state=\(state.rawValue)"
+        )
         var payload: [String: Any] = [
             "code": code.rawValue,
             "message": message,
@@ -1504,6 +1643,9 @@ extension NativeWebRTCController: RTCPeerConnectionDelegate {
             guard let self else {
                 return
             }
+            self.log(
+                "iceConnectionState changed to \(self.mapIceConnectionState(newState)) state=\(self.state.rawValue) connectionId=\(self.activeConnectionId ?? "nil")"
+            )
             switch newState {
             case .connected, .completed:
                 self.reconnectAttempts = 0
@@ -1537,6 +1679,9 @@ extension NativeWebRTCController: RTCPeerConnectionDelegate {
             guard let self else {
                 return
             }
+            self.log(
+                "peerConnectionState changed to \(self.mapPeerConnectionState(stateChanged)) state=\(self.state.rawValue) connectionId=\(self.activeConnectionId ?? "nil")"
+            )
             if stateChanged == .failed {
                 self.scheduleReconnectLocked(reason: "peer_connection_failed")
             }
@@ -1576,6 +1721,9 @@ extension NativeWebRTCController: RTCDataChannelDelegate {
             guard let self else {
                 return
             }
+            self.log(
+                "dataChannelState changed to \(String(describing: dataChannel.readyState)) state=\(self.state.rawValue) connectionId=\(self.activeConnectionId ?? "nil")"
+            )
             switch dataChannel.readyState {
             case .open:
                 self.updateStateLocked(.ready, reason: "data_channel_open")
