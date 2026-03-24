@@ -3,6 +3,7 @@ package com.memora.ai.nativemic;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -60,5 +61,28 @@ public class NativeWebRTCUnitTest {
         assertNull(NativeWebRTC.parseNullableCodec(null));
         assertNull(NativeWebRTC.parseNullableCodec("default"));
         assertEquals("opus", NativeWebRTC.parseNullableCodec("opus"));
+    }
+
+    @Test
+    public void canStartConnectionFromIdleAndError() {
+        assertTrue(NativeWebRTC.canStartConnection(NativeWebRTC.NativeWebRTCState.IDLE));
+        assertTrue(NativeWebRTC.canStartConnection(NativeWebRTC.NativeWebRTCState.ERROR));
+        assertFalse(NativeWebRTC.canStartConnection(NativeWebRTC.NativeWebRTCState.CONNECTED));
+    }
+
+    @Test
+    public void shouldResetBeforeConnectForStaleOrErrorState() {
+        assertTrue(NativeWebRTC.shouldResetBeforeConnect(NativeWebRTC.NativeWebRTCState.ERROR, true));
+        assertTrue(NativeWebRTC.shouldResetBeforeConnect(NativeWebRTC.NativeWebRTCState.IDLE, true));
+        assertFalse(NativeWebRTC.shouldResetBeforeConnect(NativeWebRTC.NativeWebRTCState.IDLE, false));
+        assertFalse(NativeWebRTC.shouldResetBeforeConnect(NativeWebRTC.NativeWebRTCState.CONNECTED, true));
+    }
+
+    @Test
+    public void disconnectAndDiagnosticsAllowedFromError() {
+        assertTrue(NativeWebRTC.canDisconnect(NativeWebRTC.NativeWebRTCState.ERROR));
+        assertTrue(NativeWebRTC.canInspectConnection(NativeWebRTC.NativeWebRTCState.ERROR));
+        assertFalse(NativeWebRTC.canDisconnect(NativeWebRTC.NativeWebRTCState.IDLE));
+        assertFalse(NativeWebRTC.canInspectConnection(NativeWebRTC.NativeWebRTCState.IDLE));
     }
 }

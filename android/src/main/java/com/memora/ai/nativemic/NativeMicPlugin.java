@@ -300,6 +300,18 @@ public class NativeMicPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void webrtcForceReset(PluginCall call) {
+        try {
+            webRtcController.forceReset(call.getString("reason"));
+            call.resolve();
+        } catch (NativeWebRTC.NativeWebRTCControllerError error) {
+            rejectWebRTC(call, error, null);
+        } catch (Exception exception) {
+            rejectUnexpectedWebRTC(call, exception, null);
+        }
+    }
+
+    @PluginMethod
     public void webrtcSendDataMessage(PluginCall call) {
         String connectionId = call.getString("connectionId");
         if (connectionId == null || connectionId.isEmpty()) {

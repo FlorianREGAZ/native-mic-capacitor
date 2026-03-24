@@ -365,6 +365,22 @@ public final class NativeWebRTC {
         }
     }
 
+    static boolean canStartConnection(NativeWebRTCState state) {
+        return state == NativeWebRTCState.IDLE || state == NativeWebRTCState.ERROR;
+    }
+
+    static boolean shouldResetBeforeConnect(NativeWebRTCState state, boolean hasActiveConnectionIdentity) {
+        return state == NativeWebRTCState.ERROR || (state == NativeWebRTCState.IDLE && hasActiveConnectionIdentity);
+    }
+
+    static boolean canDisconnect(NativeWebRTCState state) {
+        return state != NativeWebRTCState.IDLE;
+    }
+
+    static boolean canInspectConnection(NativeWebRTCState state) {
+        return state != NativeWebRTCState.IDLE;
+    }
+
     public void destroy() {
         Future<?> future = executor.submit(() -> {
             cleanupConnectionLocked(false, "destroy");
@@ -408,9 +424,13 @@ public final class NativeWebRTC {
         runBlockingVoid(() -> disconnectInternal(connectionId, reason));
     }
 
+    public void forceReset(String reason) throws NativeWebRTCControllerError {
+        runBlockingVoid(() -> forceResetInternal(reason));
+    }
+
     public void sendDataMessage(String connectionId, String data) throws NativeWebRTCControllerError {
         runBlockingVoid(() -> {
-            assertConnectionMatches(connectionId);
+            assertOperationalConnectionMatches(connectionId);
 
             if (dataChannel == null || dataChannel.state() != DataChannel.State.OPEN) {
                 throw new NativeWebRTCControllerError(
@@ -436,7 +456,7 @@ public final class NativeWebRTC {
 
     public void setMicEnabled(String connectionId, boolean enabled) throws NativeWebRTCControllerError {
         runBlockingVoid(() -> {
-            assertConnectionMatches(connectionId);
+            assertOperationalConnectionMatches(connectionId);
 
             if (localAudioTrack == null) {
                 throw new NativeWebRTCControllerError(
@@ -457,7 +477,7 @@ public final class NativeWebRTC {
 
     public void setRemoteAudioEnabled(String connectionId, boolean enabled) throws NativeWebRTCControllerError {
         runBlockingVoid(() -> {
-            assertConnectionMatches(connectionId);
+            assertOperationalConnectionMatches(connectionId);
             remoteAudioEnabled = enabled;
             applyRemoteAudioEnabledToRemoteTracksLocked();
         });
@@ -465,7 +485,7 @@ public final class NativeWebRTC {
 
     public void setPreferredInput(String connectionId, String inputId) throws NativeWebRTCControllerError {
         runBlockingVoid(() -> {
-            assertConnectionMatches(connectionId);
+            assertOperationalConnectionMatches(connectionId);
 
             preferredInputId = normalizeNullableString(inputId);
             validatePreferredInputLocked(preferredInputId);
@@ -475,7 +495,7 @@ public final class NativeWebRTC {
 
     public void setOutputRoute(String connectionId, NativeMic.OutputRoute route) throws NativeWebRTCControllerError {
         runBlockingVoid(() -> {
-            assertConnectionMatches(connectionId);
+            assertOperationalConnectionMatches(connectionId);
             selectedOutputRoute = route;
             applyOutputRouteLocked(route);
             emitRouteChangedLocked("set_output_route");
@@ -484,7 +504,7 @@ public final class NativeWebRTC {
 
     public StateResultModel getState(String connectionId) throws NativeWebRTCControllerError {
         return runBlocking(() -> {
-            assertConnectionMatches(connectionId);
+            assertInspectableConnectionMatches(connectionId);
             return new StateResultModel(
                 activeConnectionId,
                 state,
@@ -497,7 +517,7 @@ public final class NativeWebRTC {
 
     public JSObject getDiagnostics(String connectionId) throws NativeWebRTCControllerError {
         return runBlocking(() -> {
-            assertConnectionMatches(connectionId);
+            assertInspectableConnectionMatches(connectionId);
 
             JSObject diagnostics = new JSObject();
             diagnostics.put("connectionId", activeConnectionId);
@@ -524,7 +544,16 @@ public final class NativeWebRTC {
     }
 
     private ConnectResultModel connectInternal(ConnectOptionsModel options) throws NativeWebRTCControllerError {
-        if (state != NativeWebRTCState.IDLE) {
+        if (
+            shouldResetBeforeConnect(
+                state,
+                activeConnectionId != null || activePcId != null
+            )
+        ) {
+            cleanupConnectionLocked(true, "stale_state_before_connect");
+        }
+
+        if (!canStartConnection(state)) {
             throw new NativeWebRTCControllerError(
                 NativeWebRTCErrorCode.ALREADY_RUNNING,
                 "A WebRTC connection is already running.",
@@ -578,12 +607,37 @@ public final class NativeWebRTC {
     }
 
     private void disconnectInternal(String connectionId, String reason) throws NativeWebRTCControllerError {
-        assertConnectionMatches(connectionId);
+        assertDisconnectableConnectionMatches(connectionId);
 
         manualDisconnectRequested = true;
         updateStateLocked(NativeWebRTCState.DISCONNECTING, reason != null && !reason.isEmpty() ? reason : "disconnect");
-        cleanupConnectionLocked(true, reason != null && !reason.isEmpty() ? reason : "disconnect");
+        cleanupConnectionLocked(true, reason != null && !reason.isEmpty() ? reason : "disconnect", false);
         updateStateLocked(NativeWebRTCState.IDLE, "disconnect_complete");
+    }
+
+    private void forceResetInternal(String reason) {
+        String normalizedReason = normalizeNullableString(reason);
+        if (normalizedReason == null) {
+            normalizedReason = "force_reset";
+        }
+
+        boolean hasResidualState =
+            state != NativeWebRTCState.IDLE ||
+            activeConnectionId != null ||
+            activePcId != null ||
+            peerConnection != null ||
+            dataChannel != null ||
+            previousAudioMode != null ||
+            previousSpeakerphoneEnabled != null;
+        if (!hasResidualState) {
+            return;
+        }
+
+        cleanupConnectionLocked(
+            true,
+            normalizedReason,
+            state != NativeWebRTCState.IDLE || activeConnectionId != null || activePcId != null
+        );
     }
 
     private void ensureWebRTCFactoryLocked() throws NativeWebRTCControllerError {
@@ -1751,6 +1805,10 @@ public final class NativeWebRTC {
     }
 
     private void cleanupConnectionLocked(boolean resetConnectionIdentity, String reason) {
+        cleanupConnectionLocked(resetConnectionIdentity, reason, true);
+    }
+
+    private void cleanupConnectionLocked(boolean resetConnectionIdentity, String reason, boolean emitIdleTransition) {
         closePeerConnectionOnlyLocked();
         teardownAudioSessionLocked();
 
@@ -1766,7 +1824,7 @@ public final class NativeWebRTC {
             manualDisconnectRequested = false;
         }
 
-        if (reason != null && !reason.isEmpty() && state != NativeWebRTCState.IDLE) {
+        if (emitIdleTransition && reason != null && !reason.isEmpty() && state != NativeWebRTCState.IDLE) {
             updateStateLocked(NativeWebRTCState.IDLE, reason);
         }
     }
@@ -1838,25 +1896,44 @@ public final class NativeWebRTC {
         }
     }
 
-    private void assertConnectionMatches(String connectionId) throws NativeWebRTCControllerError {
+    private void assertActiveConnectionIdentityMatches(String connectionId) throws NativeWebRTCControllerError {
         String normalized = normalizeNullableString(connectionId);
         if (normalized == null || activeConnectionId == null || !activeConnectionId.equals(normalized)) {
-            throw new NativeWebRTCControllerError(
-                NativeWebRTCErrorCode.NOT_RUNNING,
-                "No active WebRTC connection matches " + connectionId + ".",
-                false,
-                null
-            );
+            throw notRunningError(connectionId);
         }
+    }
+
+    private void assertOperationalConnectionMatches(String connectionId) throws NativeWebRTCControllerError {
+        assertActiveConnectionIdentityMatches(connectionId);
 
         if (state == NativeWebRTCState.IDLE || state == NativeWebRTCState.ERROR) {
-            throw new NativeWebRTCControllerError(
-                NativeWebRTCErrorCode.NOT_RUNNING,
-                "No active WebRTC connection matches " + connectionId + ".",
-                false,
-                null
-            );
+            throw notRunningError(connectionId);
         }
+    }
+
+    private void assertDisconnectableConnectionMatches(String connectionId) throws NativeWebRTCControllerError {
+        assertActiveConnectionIdentityMatches(connectionId);
+
+        if (!canDisconnect(state)) {
+            throw notRunningError(connectionId);
+        }
+    }
+
+    private void assertInspectableConnectionMatches(String connectionId) throws NativeWebRTCControllerError {
+        assertActiveConnectionIdentityMatches(connectionId);
+
+        if (!canInspectConnection(state)) {
+            throw notRunningError(connectionId);
+        }
+    }
+
+    private NativeWebRTCControllerError notRunningError(String connectionId) {
+        return new NativeWebRTCControllerError(
+            NativeWebRTCErrorCode.NOT_RUNNING,
+            "No active WebRTC connection matches " + connectionId + ".",
+            false,
+            null
+        );
     }
 
     private void updateStateLocked(NativeWebRTCState nextState, String reason) {
