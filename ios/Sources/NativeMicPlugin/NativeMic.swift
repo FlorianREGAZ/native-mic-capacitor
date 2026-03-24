@@ -404,6 +404,7 @@ final class OutputStreamPipeline {
     }
 }
 
+#if os(iOS)
 @objc public final class NativeMicController: NSObject {
     typealias EventEmitter = (_ eventName: String, _ payload: [String: Any]) -> Void
 
@@ -1458,3 +1459,4 @@ final class OutputStreamPipeline {
         return try processingQueue.sync(execute: block)
     }
 }
+#endif

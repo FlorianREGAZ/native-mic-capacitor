@@ -30,6 +30,81 @@ class NativeMicTests: XCTestCase {
         XCTAssertTrue(options.media.voiceProcessing)
     }
 
+    func testWebRTCParseConnectOptionsRequiresWebRTCRequest() {
+        assertWebRTCInvalidArgument("webrtcRequest is required.") {
+            _ = try NativeWebRTCController.parseConnectOptions([:])
+        }
+    }
+
+    func testWebRTCParseConnectOptionsRequiresEndpoint() {
+        assertWebRTCInvalidArgument("webrtcRequest.endpoint is required.") {
+            _ = try NativeWebRTCController.parseConnectOptions([
+                "webrtcRequest": [:]
+            ])
+        }
+    }
+
+    func testWebRTCParseConnectOptionsRejectsInvalidOutputRoute() {
+        assertWebRTCInvalidArgument("media.outputRoute must be one of: system, speaker, receiver.") {
+            _ = try NativeWebRTCController.parseConnectOptions([
+                "webrtcRequest": [
+                    "endpoint": "https://voice.example.com/offer"
+                ],
+                "media": [
+                    "outputRoute": "bluetooth"
+                ]
+            ])
+        }
+    }
+
+    func testWebRTCParseConnectOptionsClampsValuesAndHonorsExplicitMedia() throws {
+        let raw: [String: Any] = [
+            "connectionId": "  test-connection  ",
+            "webrtcRequest": [
+                "endpoint": "https://voice.example.com/offer",
+                "headers": [
+                    "Authorization": 123
+                ],
+                "requestData": [
+                    "mode": "voice"
+                ],
+                "timeoutMs": 250
+            ],
+            "waitForICEGathering": true,
+            "audioCodec": " DEFAULT ",
+            "videoCodec": "  H264  ",
+            "media": [
+                "voiceProcessing": false,
+                "startMicEnabled": false,
+                "preferredInputId": "  built-in-mic  ",
+                "outputRoute": "speaker"
+            ],
+            "reconnect": [
+                "enabled": false,
+                "maxAttempts": -3,
+                "backoffMs": 100
+            ]
+        ]
+
+        let options = try NativeWebRTCController.parseConnectOptions(raw)
+
+        XCTAssertEqual(options.connectionId, "test-connection")
+        XCTAssertEqual(options.webrtcRequest.timeoutMs, 1_000)
+        XCTAssertEqual(options.webrtcRequest.headers["Authorization"], "123")
+        XCTAssertEqual(options.webrtcRequest.requestData?["mode"] as? String, "voice")
+        XCTAssertTrue(options.waitForICEGathering)
+        XCTAssertNil(options.audioCodec)
+        XCTAssertEqual(options.videoCodec, "H264")
+        XCTAssertFalse(options.media.voiceProcessing)
+        XCTAssertFalse(options.media.startMicEnabled)
+        XCTAssertEqual(options.media.preferredInputId, "built-in-mic")
+        XCTAssertEqual(options.media.outputRoute, .speaker)
+        XCTAssertTrue(options.media.outputRouteExplicit)
+        XCTAssertFalse(options.reconnect.enabled)
+        XCTAssertEqual(options.reconnect.maxAttempts, 0)
+        XCTAssertEqual(options.reconnect.backoffMs, 250)
+    }
+
     func testWebRTCParseIceServers() throws {
         let raw: [String: Any] = [
             "iceConfig": [
@@ -56,10 +131,40 @@ class NativeMicTests: XCTestCase {
         XCTAssertEqual(servers[1].credential, "pass")
     }
 
+    func testWebRTCParseIceServersRejectsNonObjectEntry() {
+        assertWebRTCInvalidArgument("iceConfig.iceServers[0] must be an object.") {
+            _ = try NativeWebRTCController.parseIceServers([
+                "iceConfig": [
+                    "iceServers": ["not-an-object"]
+                ]
+            ])
+        }
+    }
+
+    func testWebRTCParseIceServersRejectsBlankUrls() {
+        assertWebRTCInvalidArgument("iceConfig.iceServers[0].urls is required.") {
+            _ = try NativeWebRTCController.parseIceServers([
+                "iceConfig": [
+                    "iceServers": [
+                        [
+                            "urls": [" "]
+                        ]
+                    ]
+                ]
+            ])
+        }
+    }
+
+    func testWebRTCParseIceServersReturnsEmptyWhenConfigMissing() throws {
+        XCTAssertTrue(try NativeWebRTCController.parseIceServers([:]).isEmpty)
+    }
+
     func testWebRTCParseNullableCodec() {
         XCTAssertNil(NativeWebRTCController.parseNullableCodec(nil))
         XCTAssertNil(NativeWebRTCController.parseNullableCodec("default"))
+        XCTAssertNil(NativeWebRTCController.parseNullableCodec(" DEFAULT "))
         XCTAssertEqual(NativeWebRTCController.parseNullableCodec("opus"), "opus")
+        XCTAssertEqual(NativeWebRTCController.parseNullableCodec("  aac  "), "aac")
     }
 
     func testWebRTCCanStartConnectionFromIdleAndError() {
@@ -100,5 +205,24 @@ class NativeMicTests: XCTestCase {
         XCTAssertTrue(NativeWebRTCController.canInspectConnection(from: .error))
         XCTAssertFalse(NativeWebRTCController.canDisconnect(from: .idle))
         XCTAssertFalse(NativeWebRTCController.canInspectConnection(from: .idle))
+    }
+
+    private func assertWebRTCInvalidArgument(
+        _ expectedMessage: String,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ block: () throws -> Void
+    ) {
+        do {
+            try block()
+            XCTFail("Expected NativeWebRTCControllerError", file: file, line: line)
+        } catch let error as NativeWebRTCControllerError {
+            XCTAssertEqual(error.code, .invalidArgument, file: file, line: line)
+            XCTAssertEqual(error.message, expectedMessage, file: file, line: line)
+            XCTAssertFalse(error.recoverable, file: file, line: line)
+            XCTAssertNil(error.nativeCode, file: file, line: line)
+        } catch {
+            XCTFail("Unexpected error: \(error)", file: file, line: line)
+        }
     }
 }

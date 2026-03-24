@@ -126,15 +126,16 @@ struct NativeWebRTCStateResultModel {
     }
 }
 
+private enum NativeWebRTCSharedConstants {
+    static let defaultTimeoutMs = 15_000
+    static let defaultReconnectMaxAttempts = 3
+    static let defaultReconnectBackoffMs = 2_000
+    static let candidateFlushDelayMs = 200
+}
+
+#if os(iOS)
 @objc public final class NativeWebRTCController: NSObject {
     typealias EventEmitter = (_ eventName: String, _ payload: [String: Any]) -> Void
-
-    private enum Constants {
-        static let defaultTimeoutMs = 15_000
-        static let defaultReconnectMaxAttempts = 3
-        static let defaultReconnectBackoffMs = 2_000
-        static let candidateFlushDelayMs = 200
-    }
 
     private let queue = DispatchQueue(label: "com.memora.ai.nativemic.webrtc", qos: .userInitiated)
     private let eventQueue = DispatchQueue(label: "com.memora.ai.nativemic.webrtc.events")
@@ -181,25 +182,6 @@ struct NativeWebRTCStateResultModel {
 
         queue.setSpecific(key: queueKey, value: 1)
         RTCInitializeSSL()
-    }
-
-    static func canStartConnection(from state: NativeWebRTCState) -> Bool {
-        state == .idle || state == .error
-    }
-
-    static func shouldResetBeforeConnect(
-        from state: NativeWebRTCState,
-        hasActiveConnectionIdentity: Bool
-    ) -> Bool {
-        state == .error || (state == .idle && hasActiveConnectionIdentity)
-    }
-
-    static func canDisconnect(from state: NativeWebRTCState) -> Bool {
-        state != .idle
-    }
-
-    static func canInspectConnection(from state: NativeWebRTCState) -> Bool {
-        state != .idle
     }
 
     private func log(_ message: String) {
@@ -843,7 +825,7 @@ struct NativeWebRTCStateResultModel {
         }
 
         candidateFlushWorkItem = workItem
-        queue.asyncAfter(deadline: .now() + .milliseconds(Constants.candidateFlushDelayMs), execute: workItem)
+        queue.asyncAfter(deadline: .now() + .milliseconds(NativeWebRTCSharedConstants.candidateFlushDelayMs), execute: workItem)
     }
 
     private func flushIceCandidatesLocked() {
@@ -1787,6 +1769,32 @@ extension NativeWebRTCController: RTCDataChannelDelegate {
     }
 }
 
+#else
+final class NativeWebRTCController: NSObject {
+}
+#endif
+
+extension NativeWebRTCController {
+    static func canStartConnection(from state: NativeWebRTCState) -> Bool {
+        state == .idle || state == .error
+    }
+
+    static func shouldResetBeforeConnect(
+        from state: NativeWebRTCState,
+        hasActiveConnectionIdentity: Bool
+    ) -> Bool {
+        state == .error || (state == .idle && hasActiveConnectionIdentity)
+    }
+
+    static func canDisconnect(from state: NativeWebRTCState) -> Bool {
+        state != .idle
+    }
+
+    static func canInspectConnection(from state: NativeWebRTCState) -> Bool {
+        state != .idle
+    }
+}
+
 extension NativeWebRTCController {
     static func parseConnectOptions(_ rawOptions: [String: Any]) throws -> NativeWebRTCConnectOptionsModel {
         let connectionId = normalizeStatic(rawOptions["connectionId"] as? String) ?? UUID().uuidString
@@ -1814,7 +1822,7 @@ extension NativeWebRTCController {
         }
 
         let requestData = requestObject["requestData"] as? [String: Any]
-        let timeoutMs = max(1_000, (requestObject["timeoutMs"] as? Int) ?? Constants.defaultTimeoutMs)
+        let timeoutMs = max(1_000, (requestObject["timeoutMs"] as? Int) ?? NativeWebRTCSharedConstants.defaultTimeoutMs)
 
         let request = WebRTCRequestInfoModel(
             endpoint: endpoint,
@@ -1860,8 +1868,8 @@ extension NativeWebRTCController {
         let reconnectObject = rawOptions["reconnect"] as? [String: Any]
         let reconnect = WebRTCReconnectOptionsModel(
             enabled: reconnectObject?["enabled"] as? Bool ?? true,
-            maxAttempts: max(0, reconnectObject?["maxAttempts"] as? Int ?? Constants.defaultReconnectMaxAttempts),
-            backoffMs: max(250, reconnectObject?["backoffMs"] as? Int ?? Constants.defaultReconnectBackoffMs)
+            maxAttempts: max(0, reconnectObject?["maxAttempts"] as? Int ?? NativeWebRTCSharedConstants.defaultReconnectMaxAttempts),
+            backoffMs: max(250, reconnectObject?["backoffMs"] as? Int ?? NativeWebRTCSharedConstants.defaultReconnectBackoffMs)
         )
 
         return NativeWebRTCConnectOptionsModel(

@@ -17,8 +17,16 @@ let package = Package(
         .target(
             name: "NativeMicPlugin",
             dependencies: [
-                .product(name: "Capacitor", package: "capacitor-swift-pm"),
-                .product(name: "Cordova", package: "capacitor-swift-pm"),
+                .product(
+                    name: "Capacitor",
+                    package: "capacitor-swift-pm",
+                    condition: .when(platforms: [.iOS])
+                ),
+                .product(
+                    name: "Cordova",
+                    package: "capacitor-swift-pm",
+                    condition: .when(platforms: [.iOS])
+                ),
                 .product(name: "WebRTC", package: "WebRTC")
             ],
             path: "ios/Sources/NativeMicPlugin"),

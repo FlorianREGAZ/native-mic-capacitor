@@ -1,3 +1,4 @@
+#if canImport(Capacitor)
 import Capacitor
 import Foundation
 
@@ -610,3 +611,4 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
         )
     }
 }
+#endif
