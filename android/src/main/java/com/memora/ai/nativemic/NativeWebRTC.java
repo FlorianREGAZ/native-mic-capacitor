@@ -543,6 +543,10 @@ public final class NativeWebRTC {
         });
     }
 
+    public int getPreferredVolumeControlStream() throws NativeWebRTCControllerError {
+        return runBlocking(this::resolvePreferredVolumeControlStreamLocked);
+    }
+
     private ConnectResultModel connectInternal(ConnectOptionsModel options) throws NativeWebRTCControllerError {
         if (
             shouldResetBeforeConnect(
@@ -1611,6 +1615,21 @@ public final class NativeWebRTC {
         }
 
         return NativeMic.OutputRoute.SYSTEM;
+    }
+
+    private int resolvePreferredVolumeControlStreamLocked() {
+        if (state == NativeWebRTCState.IDLE || state == NativeWebRTCState.ERROR) {
+            return AudioManager.USE_DEFAULT_STREAM_TYPE;
+        }
+
+        switch (selectedOutputRoute) {
+            case RECEIVER:
+                return AudioManager.STREAM_VOICE_CALL;
+            case SPEAKER:
+            case SYSTEM:
+            default:
+                return AudioManager.STREAM_MUSIC;
+        }
     }
 
     private AudioDeviceInfo findOutputDeviceByType(int type) {

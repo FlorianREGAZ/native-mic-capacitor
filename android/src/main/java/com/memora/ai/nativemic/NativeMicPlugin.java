@@ -1,6 +1,8 @@
 package com.memora.ai.nativemic;
 
 import android.Manifest;
+import android.app.Activity;
+import android.media.AudioManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -27,7 +29,14 @@ public class NativeMicPlugin extends Plugin {
     }
 
     @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        syncWebRtcVolumeControlStream();
+    }
+
+    @Override
     protected void handleOnDestroy() {
+        resetWebRtcVolumeControlStream();
         if (controller != null) {
             controller.destroy();
         }
@@ -254,6 +263,7 @@ public class NativeMicPlugin extends Plugin {
             NativeMic.validatePermissionForStart(toMicPermissionState(getPermissionState("microphone")));
             NativeWebRTC.ConnectOptionsModel options = NativeWebRTC.parseConnectOptions(NativeWebRTC.extractMap(call.getData()));
             NativeWebRTC.ConnectResultModel result = webRtcController.connect(options);
+            syncWebRtcVolumeControlStream();
             call.resolve(result.asJSObject());
         } catch (NativeMic.NativeMicControllerError error) {
             rejectWebRTC(
@@ -291,6 +301,7 @@ public class NativeMicPlugin extends Plugin {
         String reason = call.getString("reason");
         try {
             webRtcController.disconnect(connectionId, reason);
+            resetWebRtcVolumeControlStream();
             call.resolve();
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
@@ -303,6 +314,7 @@ public class NativeMicPlugin extends Plugin {
     public void webrtcForceReset(PluginCall call) {
         try {
             webRtcController.forceReset(call.getString("reason"));
+            resetWebRtcVolumeControlStream();
             call.resolve();
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, null);
@@ -492,6 +504,7 @@ public class NativeMicPlugin extends Plugin {
 
         try {
             webRtcController.setOutputRoute(connectionId, route);
+            syncWebRtcVolumeControlStream();
             call.resolve();
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
@@ -654,6 +667,29 @@ public class NativeMicPlugin extends Plugin {
             String.valueOf(error.hashCode()),
             null
         );
+    }
+
+    private void syncWebRtcVolumeControlStream() {
+        Activity activity = getActivity();
+        if (webRtcController == null || activity == null) {
+            return;
+        }
+
+        try {
+            int stream = webRtcController.getPreferredVolumeControlStream();
+            activity.runOnUiThread(() -> activity.setVolumeControlStream(stream));
+        } catch (NativeWebRTC.NativeWebRTCControllerError ignored) {
+            // best effort
+        }
+    }
+
+    private void resetWebRtcVolumeControlStream() {
+        Activity activity = getActivity();
+        if (activity == null) {
+            return;
+        }
+
+        activity.runOnUiThread(() -> activity.setVolumeControlStream(AudioManager.USE_DEFAULT_STREAM_TYPE));
     }
 
     private void emitEventToJs(String eventName, JSObject payload) {

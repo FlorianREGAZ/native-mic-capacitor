@@ -340,6 +340,171 @@
         display: block;
       }
 
+      .tab-bar {
+        display: flex;
+        gap: 0;
+        margin-bottom: 1rem;
+      }
+
+      .tab-bar button {
+        flex: 1;
+        border-radius: 0;
+        text-transform: uppercase;
+        font-size: 0.78rem;
+        letter-spacing: 0.06em;
+        padding: 0.62rem 0.7rem;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.48);
+        color: var(--muted);
+        cursor: pointer;
+        transition: background 120ms ease, color 120ms ease;
+      }
+
+      .tab-bar button:hover {
+        transform: none;
+        box-shadow: none;
+      }
+
+      .tab-bar button.active {
+        background: linear-gradient(90deg, var(--accent-a), #2088aa);
+        color: #f2f8fb;
+        border-color: var(--accent-a);
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.visible {
+        display: block;
+      }
+
+      .rtc-state-bar {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 0.75rem;
+      }
+
+      .chip[data-state='connected']::before,
+      .chip[data-state='ready']::before {
+        background: var(--ok);
+      }
+
+      .chip[data-state='connecting']::before,
+      .chip[data-state='initializing']::before,
+      .chip[data-state='reconnecting']::before {
+        background: var(--warn);
+      }
+
+      .chip[data-state='disconnecting']::before {
+        background: var(--muted);
+      }
+
+      .route-btn-group {
+        display: flex;
+        gap: 0;
+      }
+
+      .route-btn-group button {
+        border-radius: 0;
+        min-width: 80px;
+      }
+
+      .route-btn-group button.active-route {
+        background: linear-gradient(90deg, var(--accent-c), #2d6a4f);
+        color: #eefcf5;
+        border-color: var(--accent-c);
+      }
+
+      .audio-meter-row {
+        display: grid;
+        grid-template-columns: 80px 1fr 50px;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.4rem;
+        font-size: 0.8rem;
+      }
+
+      .audio-meter-shell {
+        height: 12px;
+        border: 1px solid rgba(29, 35, 44, 0.24);
+        background: rgba(255, 255, 255, 0.8);
+        position: relative;
+      }
+
+      .audio-meter-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0;
+        transition: width 80ms ease-out;
+      }
+
+      .audio-meter-fill.local {
+        background: linear-gradient(90deg, #0f6d95, #34a4be);
+      }
+
+      .audio-meter-fill.remote {
+        background: linear-gradient(90deg, #1f4f38, #2d8a5f);
+      }
+
+      .volume-info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+
+      .volume-info-card {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.6);
+        padding: 0.6rem;
+      }
+
+      .volume-info-card h4 {
+        margin: 0 0 0.35rem;
+        font-family: 'Bricolage Grotesque', 'Avenir Next', sans-serif;
+        font-size: 0.88rem;
+      }
+
+      .dc-msg-area {
+        display: grid;
+        gap: 0.4rem;
+      }
+
+      .dc-msg-area textarea {
+        min-height: 60px;
+        border: 1px solid rgba(29, 35, 44, 0.28);
+        background: rgba(255, 255, 255, 0.75);
+        padding: 0.5rem;
+        font: inherit;
+        font-size: 0.8rem;
+        resize: vertical;
+      }
+
+      .dc-log {
+        max-height: 160px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.6);
+        font-size: 0.76rem;
+      }
+
+      .dc-log-entry {
+        padding: 0.3rem 0.5rem;
+        border-bottom: 1px dashed rgba(29, 35, 44, 0.1);
+        word-break: break-all;
+      }
+
+      .dc-log-entry.sent {
+        color: var(--accent-a);
+      }
+
+      .dc-log-entry.received {
+        color: var(--accent-c);
+      }
+
       .logs {
         margin-top: 0.8rem;
         max-height: 320px;
@@ -425,6 +590,12 @@
         </p>
       </header>
 
+      <div class="tab-bar">
+        <button id="tabMic" class="active">Mic Capture</button>
+        <button id="tabWebrtc">WebRTC</button>
+      </div>
+
+      <div id="tabMicContent" class="tab-content visible">
       <section class="layout">
         <article class="panel">
           <section class="section">
@@ -623,12 +794,176 @@
           </section>
         </article>
       </section>
+      </div>
+
+      <div id="tabWebrtcContent" class="tab-content">
+      <section class="layout">
+        <article class="panel">
+          <section class="section">
+            <h2>WebRTC Connection</h2>
+            <div class="grid two">
+              <div class="field">
+                <label for="rtcEndpoint">Endpoint URL</label>
+                <input id="rtcEndpoint" type="text" placeholder="https://your-server.com/webrtc/offer" />
+              </div>
+              <div class="field">
+                <label for="rtcConnectionId">Connection ID (optional)</label>
+                <input id="rtcConnectionId" type="text" placeholder="auto-generated if empty" />
+              </div>
+            </div>
+            <div class="field" style="margin-top: 0.65rem">
+              <label for="rtcHeaders">Headers (JSON)</label>
+              <textarea id="rtcHeaders" placeholder='{"Authorization": "Bearer ..."}'>{}</textarea>
+            </div>
+            <div class="field" style="margin-top: 0.65rem">
+              <label for="rtcRequestData">Request Data (JSON, sent alongside SDP)</label>
+              <textarea id="rtcRequestData" placeholder='{"room_id": "test"}'>{}</textarea>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Media & Audio Options</h2>
+            <div class="grid three">
+              <div class="field">
+                <label for="rtcOutputRoute">Output route</label>
+                <select id="rtcOutputRoute">
+                  <option value="speaker" selected>speaker</option>
+                  <option value="system">system</option>
+                  <option value="receiver">receiver</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="rtcTimeoutMs">Timeout (ms)</label>
+                <input id="rtcTimeoutMs" type="number" value="15000" min="1000" step="1000" />
+              </div>
+              <div class="field">
+                <label for="rtcReconnectMax">Max reconnect</label>
+                <input id="rtcReconnectMax" type="number" value="3" min="0" step="1" />
+              </div>
+            </div>
+            <div class="check-row" style="margin-top: 0.65rem">
+              <label class="check"><input id="rtcVoiceProcessing" type="checkbox" checked /><span>voiceProcessing</span></label>
+              <label class="check"><input id="rtcStartMicEnabled" type="checkbox" checked /><span>startMicEnabled</span></label>
+              <label class="check"><input id="rtcWaitIce" type="checkbox" /><span>waitForICEGathering</span></label>
+              <label class="check"><input id="rtcReconnectEnabled" type="checkbox" checked /><span>reconnect enabled</span></label>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Connect / Disconnect</h2>
+            <div class="buttons">
+              <button id="btnRtcConnect" class="primary">Connect</button>
+              <button id="btnRtcDisconnect" class="warn">Disconnect</button>
+              <button id="btnRtcForceReset">Force Reset</button>
+              <button id="btnRtcIsAvailable">isAvailable</button>
+            </div>
+            <div class="result-box" style="margin-top: 0.7rem">
+              <pre id="rtcMethodResult">Ready.</pre>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Data Channel</h2>
+            <div class="dc-msg-area">
+              <textarea id="rtcDcMessage" placeholder='Type a message to send over the data channel...'></textarea>
+              <div class="buttons">
+                <button id="btnRtcSendDc" class="good">Send</button>
+                <button id="btnRtcClearDc">Clear Log</button>
+              </div>
+              <div class="dc-log" id="rtcDcLog"></div>
+            </div>
+          </section>
+        </article>
+
+        <article class="panel">
+          <section class="section">
+            <div class="rtc-state-bar">
+              <div class="chip" id="rtcStateChip" data-state="idle">idle</div>
+              <div class="tiny">connection: <strong id="rtcActiveConnection">none</strong></div>
+              <div class="tiny">pcId: <strong id="rtcActivePcId">none</strong></div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Audio Routing (Live)</h2>
+            <p class="tiny" style="margin-top:0; margin-bottom:0.6rem">
+              Switch output route on a live connection. On Android, watch which volume stream is active.
+            </p>
+            <div class="route-btn-group" id="rtcRouteBtnGroup">
+              <button data-route="speaker" class="active-route">Speaker</button>
+              <button data-route="system">System</button>
+              <button data-route="receiver">Receiver</button>
+            </div>
+            <div class="buttons" style="margin-top:0.5rem">
+              <button id="btnRtcMicOn" class="good">Mic ON</button>
+              <button id="btnRtcMicOff">Mic OFF</button>
+              <button id="btnRtcRemoteOn" class="good">Remote Audio ON</button>
+              <button id="btnRtcRemoteOff">Remote Audio OFF</button>
+            </div>
+            <div class="volume-info-grid">
+              <div class="volume-info-card">
+                <h4>Audio State</h4>
+                <div class="kv">
+                  <span>output route</span><strong id="rtcCurrentRoute">-</strong>
+                  <span>mic enabled</span><strong id="rtcMicState">-</strong>
+                  <span>remote audio</span><strong id="rtcRemoteState">-</strong>
+                  <span>ice state</span><strong id="rtcIceState">-</strong>
+                  <span>signaling</span><strong id="rtcSignalingState">-</strong>
+                </div>
+              </div>
+              <div class="volume-info-card">
+                <h4>Volume Stream Info</h4>
+                <div class="kv">
+                  <span>expected stream</span><strong id="rtcExpectedStream">-</strong>
+                  <span>route applied</span><strong id="rtcRouteApplied">-</strong>
+                  <span>connection state</span><strong id="rtcConnState">-</strong>
+                  <span>reconnect #</span><strong id="rtcReconnectCount">0</strong>
+                  <span>pending ICE</span><strong id="rtcPendingIce">0</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Audio Levels</h2>
+            <div class="audio-meter-row">
+              <span>Local</span>
+              <div class="audio-meter-shell"><div class="audio-meter-fill local" id="rtcLocalLevelFill"></div></div>
+              <strong id="rtcLocalLevelValue">0.00</strong>
+            </div>
+            <div class="audio-meter-row">
+              <span>Remote</span>
+              <div class="audio-meter-shell"><div class="audio-meter-fill remote" id="rtcRemoteLevelFill"></div></div>
+              <strong id="rtcRemoteLevelValue">0.00</strong>
+            </div>
+          </section>
+
+          <section class="section">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <h2 style="margin-bottom:0">WebRTC Diagnostics</h2>
+              <button id="btnRtcDiagnostics">Refresh</button>
+            </div>
+            <div class="diagnostics">
+              <pre id="rtcDiagnosticsOutput">{}</pre>
+            </div>
+          </section>
+
+          <section class="section">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <h2 style="margin-bottom:0">WebRTC Event Log</h2>
+              <button id="btnRtcClearLog">clear</button>
+            </div>
+            <div class="logs" id="rtcLogContainer"></div>
+          </section>
+        </article>
+      </section>
+      </div>
     </main>
 
     <script type="module">
       import { NativeMic } from 'native-mic-capacitor';
 
-      const EVENT_NAMES = [
+      const MIC_EVENT_NAMES = [
         'micStateChanged',
         'micPcmChunk',
         'micAudioLevel',
@@ -636,6 +971,18 @@
         'micInterruption',
         'micError',
       ];
+
+      const WEBRTC_EVENT_NAMES = [
+        'webrtcStateChanged',
+        'webrtcDataMessage',
+        'webrtcTrackStarted',
+        'webrtcTrackStopped',
+        'webrtcLocalAudioLevel',
+        'webrtcRemoteAudioLevel',
+        'webrtcError',
+      ];
+
+      const EVENT_NAMES = MIC_EVENT_NAMES;
 
       const STREAM_KEYS = ['pcm16k_s16le', 'pcm48k_s16le'];
 
@@ -688,6 +1035,47 @@
         levelCanvas: document.getElementById('levelCanvas'),
       };
 
+      const rtcEl = {
+        methodResult: document.getElementById('rtcMethodResult'),
+        stateChip: document.getElementById('rtcStateChip'),
+        activeConnection: document.getElementById('rtcActiveConnection'),
+        activePcId: document.getElementById('rtcActivePcId'),
+        logContainer: document.getElementById('rtcLogContainer'),
+        diagnosticsOutput: document.getElementById('rtcDiagnosticsOutput'),
+
+        endpoint: document.getElementById('rtcEndpoint'),
+        connectionId: document.getElementById('rtcConnectionId'),
+        headers: document.getElementById('rtcHeaders'),
+        requestData: document.getElementById('rtcRequestData'),
+        outputRoute: document.getElementById('rtcOutputRoute'),
+        timeoutMs: document.getElementById('rtcTimeoutMs'),
+        reconnectMax: document.getElementById('rtcReconnectMax'),
+        voiceProcessing: document.getElementById('rtcVoiceProcessing'),
+        startMicEnabled: document.getElementById('rtcStartMicEnabled'),
+        waitIce: document.getElementById('rtcWaitIce'),
+        reconnectEnabled: document.getElementById('rtcReconnectEnabled'),
+
+        routeBtnGroup: document.getElementById('rtcRouteBtnGroup'),
+        currentRoute: document.getElementById('rtcCurrentRoute'),
+        micState: document.getElementById('rtcMicState'),
+        remoteState: document.getElementById('rtcRemoteState'),
+        iceState: document.getElementById('rtcIceState'),
+        signalingState: document.getElementById('rtcSignalingState'),
+        expectedStream: document.getElementById('rtcExpectedStream'),
+        routeApplied: document.getElementById('rtcRouteApplied'),
+        connState: document.getElementById('rtcConnState'),
+        reconnectCount: document.getElementById('rtcReconnectCount'),
+        pendingIce: document.getElementById('rtcPendingIce'),
+
+        localLevelFill: document.getElementById('rtcLocalLevelFill'),
+        localLevelValue: document.getElementById('rtcLocalLevelValue'),
+        remoteLevelFill: document.getElementById('rtcRemoteLevelFill'),
+        remoteLevelValue: document.getElementById('rtcRemoteLevelValue'),
+
+        dcMessage: document.getElementById('rtcDcMessage'),
+        dcLog: document.getElementById('rtcDcLog'),
+      };
+
       const app = {
         state: 'idle',
         captureId: null,
@@ -695,6 +1083,17 @@
         listenerHandles: [],
         chunkStats: createChunkStats(),
         dbfsHistory: [],
+      };
+
+      const rtcApp = {
+        state: 'idle',
+        connectionId: null,
+        pcId: null,
+        outputRoute: 'speaker',
+        micEnabled: true,
+        remoteAudioEnabled: true,
+        listenerHandles: [],
+        listenersAttached: false,
       };
 
       function createChunkStats() {
@@ -1173,8 +1572,423 @@
         });
       }
 
+      function setRtcState(nextState) {
+        rtcApp.state = nextState;
+        rtcEl.stateChip.dataset.state = nextState;
+        rtcEl.stateChip.textContent = nextState;
+      }
+
+      function setRtcConnectionInfo(connectionId, pcId) {
+        rtcApp.connectionId = connectionId || null;
+        rtcApp.pcId = pcId || null;
+        rtcEl.activeConnection.textContent = rtcApp.connectionId ?? 'none';
+        rtcEl.activePcId.textContent = rtcApp.pcId ?? 'none';
+      }
+
+      function renderRtcMethodResult(name, payload) {
+        rtcEl.methodResult.textContent = `${name}\n${safeJson(payload)}`;
+      }
+
+      function appendRtcLog(kind, label, payload) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'log-entry';
+
+        const head = document.createElement('div');
+        head.className = 'log-head';
+
+        const dot = document.createElement('span');
+        dot.className = `dot ${kind}`;
+
+        const time = document.createElement('time');
+        time.textContent = new Date().toLocaleTimeString();
+
+        const title = document.createElement('strong');
+        title.textContent = label;
+
+        head.appendChild(dot);
+        head.appendChild(time);
+        head.appendChild(title);
+
+        const body = document.createElement('pre');
+        body.textContent = safeJson(payload);
+
+        wrapper.appendChild(head);
+        wrapper.appendChild(body);
+        rtcEl.logContainer.prepend(wrapper);
+
+        while (rtcEl.logContainer.children.length > 220) {
+          rtcEl.logContainer.removeChild(rtcEl.logContainer.lastChild);
+        }
+      }
+
+      function appendDcLog(direction, text) {
+        const entry = document.createElement('div');
+        entry.className = `dc-log-entry ${direction}`;
+        const prefix = direction === 'sent' ? '>>> ' : '<<< ';
+        const ts = new Date().toLocaleTimeString();
+        entry.textContent = `[${ts}] ${prefix}${text}`;
+        rtcEl.dcLog.prepend(entry);
+
+        while (rtcEl.dcLog.children.length > 100) {
+          rtcEl.dcLog.removeChild(rtcEl.dcLog.lastChild);
+        }
+      }
+
+      function updateRtcRouteButtons(activeRoute) {
+        rtcApp.outputRoute = activeRoute;
+        rtcEl.currentRoute.textContent = activeRoute;
+
+        const expectedStream = activeRoute === 'receiver' ? 'VOICE_CALL' : 'MUSIC (media)';
+        rtcEl.expectedStream.textContent = expectedStream;
+        rtcEl.routeApplied.textContent = activeRoute;
+
+        for (const btn of rtcEl.routeBtnGroup.querySelectorAll('button')) {
+          btn.classList.toggle('active-route', btn.dataset.route === activeRoute);
+        }
+      }
+
+      function updateRtcAudioLevel(source, level) {
+        const safeLevel = Math.max(0, Math.min(1, Number.isFinite(level) ? level : 0));
+        const pct = `${(safeLevel * 100).toFixed(1)}%`;
+
+        if (source === 'local') {
+          rtcEl.localLevelFill.style.width = pct;
+          rtcEl.localLevelValue.textContent = safeLevel.toFixed(2);
+        } else {
+          rtcEl.remoteLevelFill.style.width = pct;
+          rtcEl.remoteLevelValue.textContent = safeLevel.toFixed(2);
+        }
+      }
+
+      async function runRtcCall(name, runner) {
+        try {
+          const result = await runner();
+          renderRtcMethodResult(name, result ?? { ok: true });
+          appendRtcLog('ok', name, result ?? { ok: true });
+          return result;
+        } catch (error) {
+          const parsed = parseError(error);
+          renderRtcMethodResult(`${name} (error)`, parsed);
+          appendRtcLog('error', name, parsed);
+          throw error;
+        }
+      }
+
+      function parseJsonSafe(text, fallback) {
+        if (!text || !text.trim()) return fallback;
+        try {
+          return JSON.parse(text);
+        } catch {
+          return fallback;
+        }
+      }
+
+      function onRtcEvent(eventName, payload) {
+        if (eventName !== 'webrtcLocalAudioLevel' && eventName !== 'webrtcRemoteAudioLevel') {
+          appendRtcLog('event', eventName, payload);
+        }
+
+        if (eventName === 'webrtcStateChanged') {
+          if (payload?.state) {
+            setRtcState(payload.state);
+          }
+          if (payload?.connectionId) {
+            rtcApp.connectionId = payload.connectionId;
+            rtcEl.activeConnection.textContent = payload.connectionId;
+          }
+          if (payload?.pcId) {
+            rtcApp.pcId = payload.pcId;
+            rtcEl.activePcId.textContent = payload.pcId;
+          }
+          rtcEl.connState.textContent = payload?.state ?? '-';
+          return;
+        }
+
+        if (eventName === 'webrtcLocalAudioLevel') {
+          updateRtcAudioLevel('local', payload?.level);
+          return;
+        }
+
+        if (eventName === 'webrtcRemoteAudioLevel') {
+          updateRtcAudioLevel('remote', payload?.level);
+          return;
+        }
+
+        if (eventName === 'webrtcDataMessage') {
+          appendDcLog('received', payload?.data ?? '');
+          return;
+        }
+
+        if (eventName === 'webrtcError') {
+          rtcEl.stateChip.dataset.state = 'error';
+          return;
+        }
+      }
+
+      async function attachRtcListeners() {
+        if (rtcApp.listenersAttached) return;
+
+        for (const eventName of WEBRTC_EVENT_NAMES) {
+          const handle = await NativeMic.addListener(eventName, (payload) => onRtcEvent(eventName, payload));
+          rtcApp.listenerHandles.push(handle);
+        }
+
+        rtcApp.listenersAttached = true;
+        appendRtcLog('ok', 'WebRTC listeners attached', { events: WEBRTC_EVENT_NAMES });
+      }
+
+      async function refreshRtcDiagnostics() {
+        if (!rtcApp.connectionId) {
+          rtcEl.diagnosticsOutput.textContent = '{ "error": "no active connection" }';
+          return;
+        }
+
+        try {
+          const diag = await NativeMic.webrtcGetDiagnostics({ connectionId: rtcApp.connectionId });
+          rtcEl.diagnosticsOutput.textContent = safeJson(diag);
+
+          if (diag?.micEnabled !== undefined) {
+            rtcApp.micEnabled = diag.micEnabled;
+            rtcEl.micState.textContent = diag.micEnabled ? 'ON' : 'OFF';
+          }
+          if (diag?.remoteAudioEnabled !== undefined) {
+            rtcApp.remoteAudioEnabled = diag.remoteAudioEnabled;
+            rtcEl.remoteState.textContent = diag.remoteAudioEnabled ? 'ON' : 'OFF';
+          }
+          if (diag?.selectedOutputRoute) {
+            updateRtcRouteButtons(diag.selectedOutputRoute);
+          }
+          if (diag?.iceConnectionState) {
+            rtcEl.iceState.textContent = diag.iceConnectionState;
+          }
+          if (diag?.signalingState) {
+            rtcEl.signalingState.textContent = diag.signalingState;
+          }
+          if (diag?.reconnectAttempts !== undefined) {
+            rtcEl.reconnectCount.textContent = String(diag.reconnectAttempts);
+          }
+          if (diag?.pendingIceCandidates !== undefined) {
+            rtcEl.pendingIce.textContent = String(diag.pendingIceCandidates);
+          }
+          if (diag?.connectionState) {
+            rtcEl.connState.textContent = diag.connectionState;
+          }
+        } catch (err) {
+          rtcEl.diagnosticsOutput.textContent = safeJson(parseError(err));
+        }
+      }
+
+      function bindRtcUi() {
+        // Tab switching
+        document.getElementById('tabMic').addEventListener('click', () => {
+          document.getElementById('tabMic').classList.add('active');
+          document.getElementById('tabWebrtc').classList.remove('active');
+          document.getElementById('tabMicContent').classList.add('visible');
+          document.getElementById('tabWebrtcContent').classList.remove('visible');
+        });
+
+        document.getElementById('tabWebrtc').addEventListener('click', () => {
+          document.getElementById('tabWebrtc').classList.add('active');
+          document.getElementById('tabMic').classList.remove('active');
+          document.getElementById('tabWebrtcContent').classList.add('visible');
+          document.getElementById('tabMicContent').classList.remove('visible');
+        });
+
+        document.getElementById('btnRtcIsAvailable').addEventListener('click', async () => {
+          await runRtcCall('webrtcIsAvailable', () => NativeMic.webrtcIsAvailable());
+        });
+
+        document.getElementById('btnRtcConnect').addEventListener('click', async () => {
+          const endpoint = rtcEl.endpoint.value.trim();
+          if (!endpoint) {
+            appendRtcLog('error', 'webrtcConnect', { message: 'Endpoint URL is required.' });
+            return;
+          }
+
+          const headers = parseJsonSafe(rtcEl.headers.value, {});
+          const requestData = parseJsonSafe(rtcEl.requestData.value, undefined);
+          const connectionId = rtcEl.connectionId.value.trim() || undefined;
+          const outputRoute = rtcEl.outputRoute.value;
+          const timeoutMs = parseInt(rtcEl.timeoutMs.value, 10) || 15000;
+          const maxAttempts = parseInt(rtcEl.reconnectMax.value, 10) || 3;
+
+          const options = {
+            connectionId,
+            webrtcRequest: {
+              endpoint,
+              headers,
+              requestData,
+              timeoutMs,
+            },
+            waitForICEGathering: rtcEl.waitIce.checked,
+            media: {
+              voiceProcessing: rtcEl.voiceProcessing.checked,
+              startMicEnabled: rtcEl.startMicEnabled.checked,
+              outputRoute,
+            },
+            reconnect: {
+              enabled: rtcEl.reconnectEnabled.checked,
+              maxAttempts,
+              backoffMs: 2000,
+            },
+          };
+
+          try {
+            const result = await runRtcCall('webrtcConnect', () => NativeMic.webrtcConnect(options));
+            if (result?.connectionId) {
+              setRtcConnectionInfo(result.connectionId, result.pcId);
+            }
+            if (result?.selectedOutputRoute) {
+              updateRtcRouteButtons(result.selectedOutputRoute);
+            }
+            if (result?.state) {
+              setRtcState(result.state);
+            }
+            rtcApp.micEnabled = rtcEl.startMicEnabled.checked;
+            rtcApp.remoteAudioEnabled = true;
+            rtcEl.micState.textContent = rtcApp.micEnabled ? 'ON' : 'OFF';
+            rtcEl.remoteState.textContent = 'ON';
+
+            setTimeout(refreshRtcDiagnostics, 1500);
+          } catch {
+            // logged by runRtcCall
+          }
+        });
+
+        document.getElementById('btnRtcDisconnect').addEventListener('click', async () => {
+          if (!rtcApp.connectionId) {
+            appendRtcLog('error', 'webrtcDisconnect', { message: 'No active connection.' });
+            return;
+          }
+
+          try {
+            await runRtcCall('webrtcDisconnect', () =>
+              NativeMic.webrtcDisconnect({ connectionId: rtcApp.connectionId, reason: 'user_disconnect' }),
+            );
+            setRtcConnectionInfo(null, null);
+            setRtcState('idle');
+            updateRtcAudioLevel('local', 0);
+            updateRtcAudioLevel('remote', 0);
+          } catch {
+            // logged
+          }
+        });
+
+        document.getElementById('btnRtcForceReset').addEventListener('click', async () => {
+          try {
+            await runRtcCall('webrtcForceReset', () => NativeMic.webrtcForceReset({ reason: 'user_force_reset' }));
+            setRtcConnectionInfo(null, null);
+            setRtcState('idle');
+            updateRtcAudioLevel('local', 0);
+            updateRtcAudioLevel('remote', 0);
+          } catch {
+            // logged
+          }
+        });
+
+        // Live output route switching
+        for (const btn of rtcEl.routeBtnGroup.querySelectorAll('button')) {
+          btn.addEventListener('click', async () => {
+            const route = btn.dataset.route;
+            if (!rtcApp.connectionId) {
+              appendRtcLog('error', 'webrtcSetOutputRoute', { message: 'No active connection.' });
+              return;
+            }
+
+            try {
+              await runRtcCall(`webrtcSetOutputRoute(${route})`, () =>
+                NativeMic.webrtcSetOutputRoute({ connectionId: rtcApp.connectionId, route }),
+              );
+              updateRtcRouteButtons(route);
+              setTimeout(refreshRtcDiagnostics, 500);
+            } catch {
+              // logged
+            }
+          });
+        }
+
+        document.getElementById('btnRtcMicOn').addEventListener('click', async () => {
+          if (!rtcApp.connectionId) return;
+          try {
+            await runRtcCall('webrtcSetMicEnabled(true)', () =>
+              NativeMic.webrtcSetMicEnabled({ connectionId: rtcApp.connectionId, enabled: true }),
+            );
+            rtcApp.micEnabled = true;
+            rtcEl.micState.textContent = 'ON';
+          } catch {
+            // logged
+          }
+        });
+
+        document.getElementById('btnRtcMicOff').addEventListener('click', async () => {
+          if (!rtcApp.connectionId) return;
+          try {
+            await runRtcCall('webrtcSetMicEnabled(false)', () =>
+              NativeMic.webrtcSetMicEnabled({ connectionId: rtcApp.connectionId, enabled: false }),
+            );
+            rtcApp.micEnabled = false;
+            rtcEl.micState.textContent = 'OFF';
+          } catch {
+            // logged
+          }
+        });
+
+        document.getElementById('btnRtcRemoteOn').addEventListener('click', async () => {
+          if (!rtcApp.connectionId) return;
+          try {
+            await runRtcCall('webrtcSetRemoteAudioEnabled(true)', () =>
+              NativeMic.webrtcSetRemoteAudioEnabled({ connectionId: rtcApp.connectionId, enabled: true }),
+            );
+            rtcApp.remoteAudioEnabled = true;
+            rtcEl.remoteState.textContent = 'ON';
+          } catch {
+            // logged
+          }
+        });
+
+        document.getElementById('btnRtcRemoteOff').addEventListener('click', async () => {
+          if (!rtcApp.connectionId) return;
+          try {
+            await runRtcCall('webrtcSetRemoteAudioEnabled(false)', () =>
+              NativeMic.webrtcSetRemoteAudioEnabled({ connectionId: rtcApp.connectionId, enabled: false }),
+            );
+            rtcApp.remoteAudioEnabled = false;
+            rtcEl.remoteState.textContent = 'OFF';
+          } catch {
+            // logged
+          }
+        });
+
+        document.getElementById('btnRtcSendDc').addEventListener('click', async () => {
+          if (!rtcApp.connectionId) {
+            appendRtcLog('error', 'sendDataMessage', { message: 'No active connection.' });
+            return;
+          }
+          const data = rtcEl.dcMessage.value;
+          if (!data) return;
+          try {
+            await NativeMic.webrtcSendDataMessage({ connectionId: rtcApp.connectionId, data });
+            appendDcLog('sent', data);
+            rtcEl.dcMessage.value = '';
+          } catch (err) {
+            appendRtcLog('error', 'sendDataMessage', parseError(err));
+          }
+        });
+
+        document.getElementById('btnRtcClearDc').addEventListener('click', () => {
+          rtcEl.dcLog.innerHTML = '';
+        });
+
+        document.getElementById('btnRtcDiagnostics').addEventListener('click', refreshRtcDiagnostics);
+
+        document.getElementById('btnRtcClearLog').addEventListener('click', () => {
+          rtcEl.logContainer.innerHTML = '';
+        });
+      }
+
       async function bootstrap() {
         bindUi();
+        bindRtcUi();
         resetStats();
         setState('idle');
         setCaptureId(null);
@@ -1184,6 +1998,12 @@
           await attachListeners();
         } catch (error) {
           appendLog('error', 'attachListeners', parseError(error));
+        }
+
+        try {
+          await attachRtcListeners();
+        } catch (error) {
+          appendRtcLog('error', 'attachRtcListeners', parseError(error));
         }
 
         try {
@@ -1200,6 +2020,9 @@
 
       window.addEventListener('beforeunload', () => {
         void removeListeners();
+        for (const handle of rtcApp.listenerHandles) {
+          handle.remove();
+        }
       });
 
       void bootstrap();
