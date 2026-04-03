@@ -1,6 +1,6 @@
 {
 	"name": "native-mic-capacitor",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Get native stream of your microphone",
 	"main": "dist/plugin.cjs.js",
 	"module": "dist/esm/index.js",
