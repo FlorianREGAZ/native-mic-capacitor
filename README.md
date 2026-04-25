@@ -632,6 +632,7 @@ removeAllListeners() => Promise<void>
 | **`webrtcRequest`**       | <code><a href="#webrtcrequestinfo">WebRTCRequestInfo</a></code>                                                                                         |
 | **`iceConfig`**           | <code>{ iceServers?: RTCIceServerLike[]; }</code>                                                                                                       |
 | **`waitForICEGathering`** | <code>boolean</code>                                                                                                                                    |
+| **`audioOnly`**           | <code>boolean</code>                                                                                                                                    |
 | **`audioCodec`**          | <code>string \| null</code>                                                                                                                             |
 | **`videoCodec`**          | <code>string \| null</code>                                                                                                                             |
 | **`media`**               | <code>{ voiceProcessing?: boolean; startMicEnabled?: boolean; preferredInputId?: string; outputRoute?: <a href="#outputroute">OutputRoute</a>; }</code> |
