@@ -68,6 +68,7 @@ struct NativeWebRTCConnectOptionsModel {
     let webrtcRequest: WebRTCRequestInfoModel
     let iceServers: [RTCIceServerLikeModel]
     let waitForICEGathering: Bool
+    let audioOnly: Bool
     let audioCodec: String?
     let videoCodec: String?
     let media: WebRTCMediaOptionsModel
@@ -514,8 +515,10 @@ private enum NativeWebRTCSharedConstants {
         }
 
         _ = peerConnection.addTransceiver(of: .audio)
-        _ = peerConnection.addTransceiver(of: .video)
-        _ = peerConnection.addTransceiver(of: .video)
+        if activeConnectOptions?.audioOnly != true {
+            _ = peerConnection.addTransceiver(of: .video)
+            _ = peerConnection.addTransceiver(of: .video)
+        }
     }
 
     private func createLocalAudioTrackLocked(voiceProcessing: Bool) throws {
@@ -1834,6 +1837,7 @@ extension NativeWebRTCController {
         let iceServers = try parseIceServers(rawOptions)
 
         let waitForICEGathering = (rawOptions["waitForICEGathering"] as? Bool) ?? false
+        let audioOnly = (rawOptions["audioOnly"] as? Bool) ?? false
         let audioCodec = parseNullableCodec(rawOptions["audioCodec"])
         let videoCodec = parseNullableCodec(rawOptions["videoCodec"])
 
@@ -1877,6 +1881,7 @@ extension NativeWebRTCController {
             webrtcRequest: request,
             iceServers: iceServers,
             waitForICEGathering: waitForICEGathering,
+            audioOnly: audioOnly,
             audioCodec: audioCodec,
             videoCodec: videoCodec,
             media: media,

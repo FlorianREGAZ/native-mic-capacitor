@@ -51,6 +51,7 @@ public class NativeWebRTCUnitTest {
         NativeWebRTC.ConnectOptionsModel options = NativeWebRTC.parseConnectOptions(raw);
 
         assertTrue(options.connectionId != null && !options.connectionId.isEmpty());
+        assertFalse(options.audioOnly);
         assertTrue(options.reconnect.enabled);
         assertEquals(3, options.reconnect.maxAttempts);
         assertEquals(2000, options.reconnect.backoffMs);
@@ -121,6 +122,7 @@ public class NativeWebRTCUnitTest {
         raw.put("connectionId", "  test-connection  ");
         raw.put("webrtcRequest", request);
         raw.put("waitForICEGathering", true);
+        raw.put("audioOnly", true);
         raw.put("audioCodec", " DEFAULT ");
         raw.put("videoCodec", "  H264  ");
         raw.put("media", media);
@@ -133,6 +135,7 @@ public class NativeWebRTCUnitTest {
         assertEquals("123", options.webrtcRequest.headers.get("Authorization"));
         assertTrue(options.webrtcRequest.requestData != null);
         assertTrue(options.waitForICEGathering);
+        assertTrue(options.audioOnly);
         assertNull(options.audioCodec);
         assertEquals("H264", options.videoCodec);
         assertFalse(options.media.voiceProcessing);

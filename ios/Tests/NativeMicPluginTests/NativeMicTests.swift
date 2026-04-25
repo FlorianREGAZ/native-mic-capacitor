@@ -23,6 +23,7 @@ class NativeMicTests: XCTestCase {
         let options = try NativeWebRTCController.parseConnectOptions(raw)
 
         XCTAssertFalse(options.connectionId.isEmpty)
+        XCTAssertFalse(options.audioOnly)
         XCTAssertTrue(options.reconnect.enabled)
         XCTAssertEqual(options.reconnect.maxAttempts, 3)
         XCTAssertEqual(options.reconnect.backoffMs, 2_000)
@@ -71,6 +72,7 @@ class NativeMicTests: XCTestCase {
                 "timeoutMs": 250
             ],
             "waitForICEGathering": true,
+            "audioOnly": true,
             "audioCodec": " DEFAULT ",
             "videoCodec": "  H264  ",
             "media": [
@@ -93,6 +95,7 @@ class NativeMicTests: XCTestCase {
         XCTAssertEqual(options.webrtcRequest.headers["Authorization"], "123")
         XCTAssertEqual(options.webrtcRequest.requestData?["mode"] as? String, "voice")
         XCTAssertTrue(options.waitForICEGathering)
+        XCTAssertTrue(options.audioOnly)
         XCTAssertNil(options.audioCodec)
         XCTAssertEqual(options.videoCodec, "H264")
         XCTAssertFalse(options.media.voiceProcessing)

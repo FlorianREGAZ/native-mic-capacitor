@@ -201,6 +201,7 @@ public final class NativeWebRTC {
         final WebRTCRequestInfoModel webrtcRequest;
         final List<RTCIceServerLikeModel> iceServers;
         final boolean waitForICEGathering;
+        final boolean audioOnly;
         final String audioCodec;
         final String videoCodec;
         final MediaOptionsModel media;
@@ -211,6 +212,7 @@ public final class NativeWebRTC {
             WebRTCRequestInfoModel webrtcRequest,
             List<RTCIceServerLikeModel> iceServers,
             boolean waitForICEGathering,
+            boolean audioOnly,
             String audioCodec,
             String videoCodec,
             MediaOptionsModel media,
@@ -220,6 +222,7 @@ public final class NativeWebRTC {
             this.webrtcRequest = webrtcRequest;
             this.iceServers = iceServers;
             this.waitForICEGathering = waitForICEGathering;
+            this.audioOnly = audioOnly;
             this.audioCodec = audioCodec;
             this.videoCodec = videoCodec;
             this.media = media;
@@ -780,8 +783,10 @@ public final class NativeWebRTC {
         }
 
         peerConnection.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO);
-        peerConnection.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO);
-        peerConnection.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO);
+        if (activeConnectOptions == null || !activeConnectOptions.audioOnly) {
+            peerConnection.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO);
+            peerConnection.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO);
+        }
     }
 
     private void createLocalAudioTrackLocked(boolean voiceProcessing) throws NativeWebRTCControllerError {
@@ -2101,6 +2106,7 @@ public final class NativeWebRTC {
         List<RTCIceServerLikeModel> iceServers = parseIceServers(rawOptions);
 
         boolean waitForIceGathering = asBoolean(rawOptions.get("waitForICEGathering"), false);
+        boolean audioOnly = asBoolean(rawOptions.get("audioOnly"), false);
         String audioCodec = parseNullableCodec(rawOptions.get("audioCodec"));
         String videoCodec = parseNullableCodec(rawOptions.get("videoCodec"));
 
@@ -2154,6 +2160,7 @@ public final class NativeWebRTC {
             request,
             iceServers,
             waitForIceGathering,
+            audioOnly,
             audioCodec,
             videoCodec,
             media,

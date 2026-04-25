@@ -130,6 +130,7 @@ export interface NativeWebRTCConnectOptions {
   webrtcRequest: WebRTCRequestInfo;
   iceConfig?: { iceServers?: RTCIceServerLike[] };
   waitForICEGathering?: boolean;
+  audioOnly?: boolean;
   audioCodec?: string | 'default' | null;
   videoCodec?: string | 'default' | null;
   media?: {
