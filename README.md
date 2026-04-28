@@ -215,8 +215,6 @@ webrtcConnect(options: NativeWebRTCConnectOptions) => Promise<NativeWebRTCConnec
 
 **Returns:** <code>Promise&lt;<a href="#nativewebrtcconnectresult">NativeWebRTCConnectResult</a>&gt;</code>
 
-When `media.startMicEnabled` is `true` or omitted, `webrtcConnect(...)` requires microphone permission before connecting. When `media.startMicEnabled` is `false`, the WebRTC connection may start without microphone permission, and the microphone can be enabled later with `webrtcSetMicEnabled(...)` after permission is granted.
-
 --------------------
 
 
@@ -639,8 +637,6 @@ removeAllListeners() => Promise<void>
 | **`videoCodec`**          | <code>string \| null</code>                                                                                                                             |
 | **`media`**               | <code>{ voiceProcessing?: boolean; startMicEnabled?: boolean; preferredInputId?: string; outputRoute?: <a href="#outputroute">OutputRoute</a>; }</code> |
 | **`reconnect`**           | <code>{ enabled?: boolean; maxAttempts?: number; backoffMs?: number; }</code>                                                                           |
-
-`media.startMicEnabled` defaults to `true`. If it is `true`, `webrtcConnect(...)` requires microphone permission before connecting. If it is `false`, the connection may start without microphone permission and the microphone can be enabled later with `webrtcSetMicEnabled(...)` after permission is granted.
 
 
 #### WebRTCRequestInfo
