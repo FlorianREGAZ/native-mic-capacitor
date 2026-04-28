@@ -260,8 +260,8 @@ public class NativeMicPlugin extends Plugin {
     @PluginMethod
     public void webrtcConnect(PluginCall call) {
         try {
-            NativeMic.validatePermissionForStart(toMicPermissionState(getPermissionState("microphone")));
             NativeWebRTC.ConnectOptionsModel options = NativeWebRTC.parseConnectOptions(NativeWebRTC.extractMap(call.getData()));
+            validatePermissionForWebRTCConnect(toMicPermissionState(getPermissionState("microphone")), options);
             NativeWebRTC.ConnectResultModel result = webRtcController.connect(options);
             syncWebRtcVolumeControlStream();
             call.resolve(result.asJSObject());
@@ -572,6 +572,15 @@ public class NativeMicPlugin extends Plugin {
             return "denied";
         }
         return "prompt";
+    }
+
+    static void validatePermissionForWebRTCConnect(String microphonePermission, NativeWebRTC.ConnectOptionsModel options)
+        throws NativeMic.NativeMicControllerError {
+        if (!options.media.startMicEnabled) {
+            return;
+        }
+
+        NativeMic.validatePermissionForStart(microphonePermission);
     }
 
     private List<NativeMic.OutputStream> parseOutputStreams(JSArray rawStreams) {

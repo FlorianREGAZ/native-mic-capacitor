@@ -5,11 +5,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import android.media.AudioDeviceInfo;
 import com.getcapacitor.PermissionState;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 
 public class NativeMicUnitTest {
@@ -83,6 +86,66 @@ public class NativeMicUnitTest {
                 AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(new int[] { AudioDeviceInfo.TYPE_WIRED_HEADSET })
             )
         );
+    }
+
+    @Test
+    public void webRtcConnectPermissionValidationRejectsDeniedWhenStartMicEnabled() throws Exception {
+        NativeWebRTC.ConnectOptionsModel options = parseConnectOptions(null);
+
+        try {
+            NativeMicPlugin.validatePermissionForWebRTCConnect("denied", options);
+            fail("Expected NativeMicControllerError");
+        } catch (NativeMic.NativeMicControllerError error) {
+            assertEquals(NativeMic.NativeMicErrorCode.PERMISSION_DENIED, error.code);
+            assertEquals("Microphone permission denied.", error.message);
+            assertFalse(error.recoverable);
+        }
+    }
+
+    @Test
+    public void webRtcConnectPermissionValidationAllowsDeniedWhenStartMicDisabled() throws Exception {
+        NativeWebRTC.ConnectOptionsModel options = parseConnectOptions(false);
+
+        NativeMicPlugin.validatePermissionForWebRTCConnect("denied", options);
+    }
+
+    @Test
+    public void webRtcConnectPermissionValidationAllowsGrantedWhenStartMicDisabled() throws Exception {
+        NativeWebRTC.ConnectOptionsModel options = parseConnectOptions(false);
+
+        NativeMicPlugin.validatePermissionForWebRTCConnect("granted", options);
+    }
+
+    @Test
+    public void webRtcConnectPermissionValidationTreatsOmittedStartMicEnabledAsRequired() throws Exception {
+        NativeWebRTC.ConnectOptionsModel options = parseConnectOptions(null);
+
+        assertTrue(options.media.startMicEnabled);
+
+        try {
+            NativeMicPlugin.validatePermissionForWebRTCConnect("prompt", options);
+            fail("Expected NativeMicControllerError");
+        } catch (NativeMic.NativeMicControllerError error) {
+            assertEquals(NativeMic.NativeMicErrorCode.PERMISSION_DENIED, error.code);
+            assertEquals("Microphone permission not determined.", error.message);
+            assertFalse(error.recoverable);
+        }
+    }
+
+    private static NativeWebRTC.ConnectOptionsModel parseConnectOptions(Boolean startMicEnabled) throws Exception {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("endpoint", "https://voice.example.com/offer");
+
+        Map<String, Object> raw = new LinkedHashMap<>();
+        raw.put("webrtcRequest", request);
+
+        if (startMicEnabled != null) {
+            Map<String, Object> media = new LinkedHashMap<>();
+            media.put("startMicEnabled", startMicEnabled);
+            raw.put("media", media);
+        }
+
+        return NativeWebRTC.parseConnectOptions(raw);
     }
 
 }

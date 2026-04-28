@@ -1889,6 +1889,24 @@ extension NativeWebRTCController {
         )
     }
 
+    static func validatePermissionForConnect(
+        _ permission: MicPermissionState,
+        startMicEnabled: Bool
+    ) throws {
+        guard startMicEnabled else {
+            return
+        }
+
+        guard permission == .granted else {
+            throw NativeWebRTCControllerError(
+                code: .invalidArgument,
+                message: permission == .denied ? "Microphone permission denied." : "Microphone permission not determined.",
+                recoverable: false,
+                nativeCode: nil
+            )
+        }
+    }
+
     static func parseIceServers(_ rawOptions: [String: Any]) throws -> [RTCIceServerLikeModel] {
         guard
             let iceConfig = rawOptions["iceConfig"] as? [String: Any],

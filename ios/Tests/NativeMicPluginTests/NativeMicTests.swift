@@ -29,6 +29,7 @@ class NativeMicTests: XCTestCase {
         XCTAssertEqual(options.reconnect.backoffMs, 2_000)
         XCTAssertEqual(options.media.outputRoute, .system)
         XCTAssertTrue(options.media.voiceProcessing)
+        XCTAssertTrue(options.media.startMicEnabled)
     }
 
     func testWebRTCParseConnectOptionsRequiresWebRTCRequest() {
@@ -208,6 +209,33 @@ class NativeMicTests: XCTestCase {
         XCTAssertTrue(NativeWebRTCController.canInspectConnection(from: .error))
         XCTAssertFalse(NativeWebRTCController.canDisconnect(from: .idle))
         XCTAssertFalse(NativeWebRTCController.canInspectConnection(from: .idle))
+    }
+
+    func testWebRTCConnectPermissionValidationRejectsDeniedWhenStartMicEnabled() {
+        assertWebRTCInvalidArgument("Microphone permission denied.") {
+            try NativeWebRTCController.validatePermissionForConnect(.denied, startMicEnabled: true)
+        }
+    }
+
+    func testWebRTCConnectPermissionValidationAllowsDeniedWhenStartMicDisabled() throws {
+        XCTAssertNoThrow(try NativeWebRTCController.validatePermissionForConnect(.denied, startMicEnabled: false))
+    }
+
+    func testWebRTCConnectPermissionValidationAllowsGrantedWhenStartMicDisabled() throws {
+        XCTAssertNoThrow(try NativeWebRTCController.validatePermissionForConnect(.granted, startMicEnabled: false))
+    }
+
+    func testWebRTCConnectPermissionValidationTreatsOmittedStartMicEnabledAsRequired() throws {
+        let options = try NativeWebRTCController.parseConnectOptions([
+            "webrtcRequest": [
+                "endpoint": "https://voice.example.com/offer"
+            ]
+        ])
+
+        XCTAssertTrue(options.media.startMicEnabled)
+        assertWebRTCInvalidArgument("Microphone permission not determined.") {
+            try NativeWebRTCController.validatePermissionForConnect(.prompt, startMicEnabled: options.media.startMicEnabled)
+        }
     }
 
     private func assertWebRTCInvalidArgument(

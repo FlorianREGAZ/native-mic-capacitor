@@ -247,18 +247,6 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func webrtcConnect(_ call: CAPPluginCall) {
-        let permission = controller.checkPermissions()
-        if permission != .granted {
-            rejectWebRTC(
-                call,
-                code: .invalidArgument,
-                message: permission == .denied ? "Microphone permission denied." : "Microphone permission not determined.",
-                recoverable: false,
-                connectionId: nil
-            )
-            return
-        }
-
         do {
             let rawOptions = call.options.reduce(into: [String: Any]()) { partial, entry in
                 if let key = entry.key as? String {
@@ -268,6 +256,10 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
             let options = try NativeWebRTCController.parseConnectOptions(rawOptions)
+            try NativeWebRTCController.validatePermissionForConnect(
+                controller.checkPermissions(),
+                startMicEnabled: options.media.startMicEnabled
+            )
             let result = try webRtcController.connect(options: options)
             call.resolve(result.asDictionary())
         } catch let error as NativeWebRTCControllerError {
