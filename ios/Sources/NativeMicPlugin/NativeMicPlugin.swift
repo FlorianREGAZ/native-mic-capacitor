@@ -1,6 +1,7 @@
 #if canImport(Capacitor)
 import Capacitor
 import Foundation
+import UIKit
 
 @objc(NativeMicPlugin)
 public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -10,6 +11,7 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openAppSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getDevices", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPreferredInput", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setOutputRoute", returnType: CAPPluginReturnPromise),
@@ -62,6 +64,29 @@ public class NativeMicPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve([
                     "microphone": state.rawValue
                 ])
+            }
+        }
+    }
+
+    @objc func openAppSettings(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard let settingsUrl = URL(string: UIApplication.openSettingsURLString) else {
+                call.reject("Could not create the app settings URL.")
+                return
+            }
+
+            guard UIApplication.shared.canOpenURL(settingsUrl) else {
+                call.reject("Could not open the app settings screen.")
+                return
+            }
+
+            UIApplication.shared.open(settingsUrl, options: [:]) { success in
+                if success {
+                    call.resolve()
+                    return
+                }
+
+                call.reject("Could not open the app settings screen.")
             }
         }
     }

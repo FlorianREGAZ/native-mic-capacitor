@@ -197,6 +197,7 @@ export interface NativeMicPlugin {
   isAvailable(): Promise<{ available: boolean; reason?: string }>;
   checkPermissions(): Promise<{ microphone: MicPermissionState }>;
   requestPermissions(): Promise<{ microphone: MicPermissionState }>;
+  openAppSettings(): Promise<void>;
 
   getDevices(): Promise<{ inputs: MicDevice[]; selectedInputId?: string }>;
   setPreferredInput(options: { inputId: string | null }): Promise<void>;

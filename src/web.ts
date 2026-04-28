@@ -257,6 +257,10 @@ export class NativeMicWeb extends WebPlugin implements NativeMicPlugin {
 		}
 	}
 
+	async openAppSettings(): Promise<void> {
+		throw new Error("openAppSettings is only available on native platforms.");
+	}
+
 	async getDevices(): Promise<{
 		inputs: MicDevice[];
 		selectedInputId?: string;

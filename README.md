@@ -16,6 +16,7 @@ npx cap sync
 * [`isAvailable()`](#isavailable)
 * [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions()`](#requestpermissions)
+* [`openAppSettings()`](#openappsettings)
 * [`getDevices()`](#getdevices)
 * [`setPreferredInput(...)`](#setpreferredinput)
 * [`setOutputRoute(...)`](#setoutputroute)
@@ -86,6 +87,15 @@ requestPermissions() => Promise<{ microphone: MicPermissionState; }>
 ```
 
 **Returns:** <code>Promise&lt;{ microphone: <a href="#micpermissionstate">MicPermissionState</a>; }&gt;</code>
+
+--------------------
+
+
+### openAppSettings()
+
+```typescript
+openAppSettings() => Promise<void>
+```
 
 --------------------
 

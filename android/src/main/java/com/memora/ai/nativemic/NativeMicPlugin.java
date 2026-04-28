@@ -2,7 +2,10 @@ package com.memora.ai.nativemic;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.media.AudioManager;
+import android.net.Uri;
+import android.provider.Settings;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -63,6 +66,26 @@ public class NativeMicPlugin extends Plugin {
     @Override
     public void requestPermissions(PluginCall call) {
         requestPermissionForAlias("microphone", call, "permissionsCallback");
+    }
+
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(Uri.fromParts("package", getContext().getPackageName(), null));
+        intent.addCategory(Intent.CATEGORY_DEFAULT);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        try {
+            Activity activity = getActivity();
+            if (activity != null) {
+                activity.startActivity(intent);
+            } else {
+                getContext().startActivity(intent);
+            }
+            call.resolve();
+        } catch (Exception exception) {
+            reject(call, NativeMic.NativeMicErrorCode.INTERNAL, "Failed to open the app settings screen.", false, null, null);
+        }
     }
 
     @PermissionCallback
