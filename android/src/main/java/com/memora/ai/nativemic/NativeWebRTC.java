@@ -2,9 +2,12 @@ package com.memora.ai.nativemic;
 
 import android.content.Context;
 import android.media.AudioAttributes;
+import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Base64;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -351,6 +354,9 @@ public final class NativeWebRTC {
 
     private Integer previousAudioMode;
     private Boolean previousSpeakerphoneEnabled;
+    private boolean audioDeviceCallbackRegistered = false;
+
+    private final AudioDeviceCallback audioDeviceCallback;
 
     public NativeWebRTC(Context context, EventEmitter eventEmitter) {
         this.appContext = context.getApplicationContext();
@@ -358,6 +364,18 @@ public final class NativeWebRTC {
         this.eventEmitter = eventEmitter;
         this.executor = Executors.newSingleThreadScheduledExecutor();
         this.httpClient = new OkHttpClient();
+
+        this.audioDeviceCallback = new AudioDeviceCallback() {
+            @Override
+            public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
+                dispatchAudioDeviceChange("new_device_available");
+            }
+
+            @Override
+            public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
+                dispatchAudioDeviceChange("old_device_unavailable");
+            }
+        };
 
         try {
             PeerConnectionFactory.initialize(
@@ -541,6 +559,7 @@ public final class NativeWebRTC {
                 diagnostics.put("signalingState", peerConnection.signalingState().name().toLowerCase(Locale.US));
                 diagnostics.put("connectionState", peerConnection.connectionState().name().toLowerCase(Locale.US));
             }
+            diagnostics.put("audioSession", audioSessionDiagnosticsLocked());
 
             return diagnostics;
         });
@@ -667,7 +686,7 @@ public final class NativeWebRTC {
                     JavaAudioDeviceModule.builder(appContext)
                         .setAudioAttributes(
                             new AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                                 .build()
                         )
@@ -1524,6 +1543,7 @@ public final class NativeWebRTC {
             if (voiceProcessing) {
                 audioManager.setMicrophoneMute(false);
             }
+            registerAudioDeviceCallbackLocked();
         } catch (Exception exception) {
             throw new NativeWebRTCControllerError(
                 NativeWebRTCErrorCode.INTERNAL,
@@ -1593,6 +1613,58 @@ public final class NativeWebRTC {
                 String.valueOf(exception.hashCode())
             );
         }
+    }
+
+    private void dispatchAudioDeviceChange(String reason) {
+        if (executor.isShutdown()) {
+            return;
+        }
+
+        try {
+            executor.execute(() -> handleAudioDeviceChangeLocked(reason));
+        } catch (Exception ignored) {
+            // best effort
+        }
+    }
+
+    private void handleAudioDeviceChangeLocked(String reason) {
+        if (activeConnectionId == null || activeConnectOptions == null || state == NativeWebRTCState.IDLE) {
+            return;
+        }
+
+        try {
+            applyOutputRouteLocked(selectedOutputRoute);
+        } catch (NativeWebRTCControllerError error) {
+            emitErrorLocked(error.code, error.message, true, error.nativeCode, activeConnectionId);
+        }
+
+        emitRouteChangedLocked(reason);
+    }
+
+    private void registerAudioDeviceCallbackLocked() {
+        if (audioManager == null || audioDeviceCallbackRegistered || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+
+        try {
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, new Handler(Looper.getMainLooper()));
+            audioDeviceCallbackRegistered = true;
+        } catch (Exception ignored) {
+            // Route monitoring should not prevent the WebRTC session from starting.
+        }
+    }
+
+    private void unregisterAudioDeviceCallbackLocked() {
+        if (audioManager == null || !audioDeviceCallbackRegistered || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+
+        try {
+            audioManager.unregisterAudioDeviceCallback(audioDeviceCallback);
+        } catch (Exception ignored) {
+            // best effort
+        }
+        audioDeviceCallbackRegistered = false;
     }
 
     private NativeMic.OutputRoute resolveDefaultOutputRoute() {
@@ -1697,6 +1769,8 @@ public final class NativeWebRTC {
         JSObject payload = new JSObject();
         payload.put("connectionId", activeConnectionId);
         payload.put("reason", reason);
+        payload.put("selectedOutputRoute", selectedOutputRoute.wireValue);
+        payload.put("audioSession", audioSessionDiagnosticsLocked());
 
         String selectedInputId = resolveSelectedInputIdLocked();
         if (selectedInputId != null) {
@@ -1704,6 +1778,109 @@ public final class NativeWebRTC {
         }
 
         emitEventLocked("micRouteChanged", payload);
+    }
+
+    private JSObject audioSessionDiagnosticsLocked() {
+        JSObject diagnostics = new JSObject();
+        if (audioManager == null) {
+            diagnostics.put("available", false);
+            diagnostics.put("reason", "AudioManager is unavailable.");
+            return diagnostics;
+        }
+
+        diagnostics.put("available", true);
+        diagnostics.put("mode", audioModeName(audioManager.getMode()));
+        diagnostics.put("modeValue", audioManager.getMode());
+        diagnostics.put("speakerphoneOn", audioManager.isSpeakerphoneOn());
+        diagnostics.put("microphoneMute", audioManager.isMicrophoneMute());
+        diagnostics.put("audioDeviceCallbackRegistered", audioDeviceCallbackRegistered);
+
+        JSObject audioProcessing = new JSObject();
+        audioProcessing.put("hardwareAcousticEchoCancelerSupported", JavaAudioDeviceModule.isBuiltInAcousticEchoCancelerSupported());
+        audioProcessing.put("hardwareNoiseSuppressorSupported", JavaAudioDeviceModule.isBuiltInNoiseSuppressorSupported());
+        diagnostics.put("audioProcessing", audioProcessing);
+
+        diagnostics.put("outputDevices", audioDevicesDiagnostics(audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)));
+        diagnostics.put("inputDevices", audioDevicesDiagnostics(audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)));
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AudioDeviceInfo communicationDevice = audioManager.getCommunicationDevice();
+            if (communicationDevice != null) {
+                diagnostics.put("communicationDevice", audioDeviceDiagnostics(communicationDevice));
+            }
+            diagnostics.put(
+                "availableCommunicationDevices",
+                audioDevicesDiagnostics(audioManager.getAvailableCommunicationDevices().toArray(new AudioDeviceInfo[0]))
+            );
+        }
+
+        return diagnostics;
+    }
+
+    private JSArray audioDevicesDiagnostics(AudioDeviceInfo[] devices) {
+        JSArray diagnostics = new JSArray();
+        if (devices == null) {
+            return diagnostics;
+        }
+
+        for (AudioDeviceInfo device : devices) {
+            diagnostics.put(audioDeviceDiagnostics(device));
+        }
+        return diagnostics;
+    }
+
+    private JSObject audioDeviceDiagnostics(AudioDeviceInfo device) {
+        JSObject diagnostics = new JSObject();
+        diagnostics.put("id", device.getId());
+        diagnostics.put("type", mapDeviceType(device));
+        diagnostics.put("typeValue", device.getType());
+        diagnostics.put("isSource", device.isSource());
+        diagnostics.put("isSink", device.isSink());
+        diagnostics.put("productName", String.valueOf(device.getProductName()));
+        diagnostics.put("address", device.getAddress());
+        return diagnostics;
+    }
+
+    private static String audioModeName(int mode) {
+        switch (mode) {
+            case AudioManager.MODE_NORMAL:
+                return "normal";
+            case AudioManager.MODE_RINGTONE:
+                return "ringtone";
+            case AudioManager.MODE_IN_CALL:
+                return "in_call";
+            case AudioManager.MODE_IN_COMMUNICATION:
+                return "in_communication";
+            case AudioManager.MODE_CALL_SCREENING:
+                return "call_screening";
+            default:
+                return "unknown";
+        }
+    }
+
+    private static String mapDeviceType(AudioDeviceInfo device) {
+        switch (device.getType()) {
+            case AudioDeviceInfo.TYPE_BUILTIN_MIC:
+            case AudioDeviceInfo.TYPE_BUILTIN_EARPIECE:
+            case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER:
+                return "built_in";
+            case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+            case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+            case AudioDeviceInfo.TYPE_LINE_ANALOG:
+            case AudioDeviceInfo.TYPE_LINE_DIGITAL:
+                return "wired";
+            case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
+            case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
+            case AudioDeviceInfo.TYPE_BLE_HEADSET:
+            case AudioDeviceInfo.TYPE_BLE_SPEAKER:
+            case AudioDeviceInfo.TYPE_BLE_BROADCAST:
+                return "bluetooth";
+            case AudioDeviceInfo.TYPE_USB_DEVICE:
+            case AudioDeviceInfo.TYPE_USB_HEADSET:
+                return "usb";
+            default:
+                return "unknown";
+        }
     }
 
     private String resolveSelectedInputIdLocked() {
@@ -1857,6 +2034,8 @@ public final class NativeWebRTC {
         if (audioManager == null) {
             return;
         }
+
+        unregisterAudioDeviceCallbackLocked();
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

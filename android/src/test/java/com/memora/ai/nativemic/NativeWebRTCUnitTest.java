@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import android.media.AudioDeviceInfo;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,6 +57,24 @@ public class NativeWebRTCUnitTest {
         assertEquals(3, options.reconnect.maxAttempts);
         assertEquals(2000, options.reconnect.backoffMs);
         assertEquals(NativeMic.OutputRoute.SYSTEM, options.media.outputRoute);
+    }
+
+    @Test
+    public void systemRoutePolicyUsesSpeakerExceptForExternalOutputs() {
+        assertTrue(
+            AndroidAudioRouting.shouldUseSpeakerphone(
+                AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(
+                    new int[] { AudioDeviceInfo.TYPE_BUILTIN_EARPIECE, AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                )
+            )
+        );
+        assertFalse(
+            AndroidAudioRouting.shouldUseSpeakerphone(
+                AndroidAudioRouting.resolvePreferredSystemRouteDeviceType(
+                    new int[] { AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
+                )
+            )
+        );
     }
 
     @Test

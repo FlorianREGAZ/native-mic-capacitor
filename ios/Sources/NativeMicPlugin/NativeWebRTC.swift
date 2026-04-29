@@ -141,7 +141,8 @@ private enum NativeWebRTCSharedConstants {
     private let queue = DispatchQueue(label: "com.memora.ai.nativemic.webrtc", qos: .userInitiated)
     private let eventQueue = DispatchQueue(label: "com.memora.ai.nativemic.webrtc.events")
     private let queueKey = DispatchSpecificKey<Int>()
-    private let session = AVAudioSession.sharedInstance()
+    private let rtcAudioSession = RTCAudioSession.sharedInstance()
+    private var session: AVAudioSession { rtcAudioSession.session }
     private let eventEmitter: EventEmitter
 
     private var state: NativeWebRTCState = .idle
@@ -173,6 +174,7 @@ private enum NativeWebRTCSharedConstants {
     private var previousCategory: AVAudioSession.Category?
     private var previousMode: AVAudioSession.Mode?
     private var previousCategoryOptions: AVAudioSession.CategoryOptions?
+    private var didActivateAudioSession = false
 
     private var localTrackStarted = false
     private var remoteAudioTrackStarted = false
@@ -183,6 +185,12 @@ private enum NativeWebRTCSharedConstants {
 
         queue.setSpecific(key: queueKey, value: 1)
         RTCInitializeSSL()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification,
+            object: session
+        )
     }
 
     private func log(_ message: String) {
@@ -190,6 +198,7 @@ private enum NativeWebRTCSharedConstants {
     }
 
     deinit {
+        NotificationCenter.default.removeObserver(self)
         syncOnQueue {
             cleanupConnectionLocked(resetIdentity: true, reason: "deinit")
             closeFactoryLocked()
@@ -404,9 +413,9 @@ private enum NativeWebRTCSharedConstants {
                         nativeCode: nil
                     )
                 }
-                try session.setPreferredInput(input)
+                try setPreferredInputLocked(input)
             } else {
-                try session.setPreferredInput(nil)
+                try setPreferredInputLocked(nil)
             }
 
             emitRouteChangedLocked(reason: "set_preferred_input")
@@ -463,6 +472,7 @@ private enum NativeWebRTCSharedConstants {
                 diagnostics["signalingState"] = mapSignalingState(peerConnection.signalingState)
                 diagnostics["connectionState"] = mapPeerConnectionState(peerConnection.connectionState)
             }
+            diagnostics["audioSession"] = audioSessionDiagnosticsLocked()
 
             return diagnostics
         }
@@ -1199,28 +1209,79 @@ private enum NativeWebRTCSharedConstants {
         previousMode = session.mode
         previousCategoryOptions = session.categoryOptions
 
-        let mode: AVAudioSession.Mode = voiceProcessing ? .voiceChat : .default
-        try session.setCategory(.playAndRecord, mode: mode, options: categoryOptions(for: selectedOutputRoute))
-        try session.setActive(true, options: [])
+        try applyWebRTCAudioSessionConfigurationLocked(route: selectedOutputRoute, voiceProcessing: voiceProcessing, active: true)
     }
 
     private func applyOutputRouteLocked(_ route: OutputRoute) throws {
         if let activeConnectOptions {
-            let mode: AVAudioSession.Mode = activeConnectOptions.media.voiceProcessing ? .voiceChat : .default
-            try session.setCategory(.playAndRecord, mode: mode, options: categoryOptions(for: route))
+            try applyWebRTCAudioSessionConfigurationLocked(
+                route: route,
+                voiceProcessing: activeConnectOptions.media.voiceProcessing,
+                active: true
+            )
         }
 
         switch route {
         case .speaker:
-            try session.overrideOutputAudioPort(.speaker)
+            try overrideOutputAudioPortLocked(.speaker)
         case .system, .receiver:
-            try session.overrideOutputAudioPort(.none)
+            try overrideOutputAudioPortLocked(.none)
         }
     }
 
-    private func categoryOptions(for route: OutputRoute) -> AVAudioSession.CategoryOptions {
+    private func applyWebRTCAudioSessionConfigurationLocked(
+        route: OutputRoute,
+        voiceProcessing: Bool,
+        active: Bool
+    ) throws {
+        let configuration = RTCAudioSessionConfiguration.webRTC()
+        configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+        configuration.mode = Self.audioSessionMode(voiceProcessing: voiceProcessing).rawValue
+        configuration.categoryOptions = Self.categoryOptions(for: route)
+        RTCAudioSessionConfiguration.setWebRTC(configuration)
+
+        rtcAudioSession.lockForConfiguration()
+        defer {
+            rtcAudioSession.unlockForConfiguration()
+        }
+
+        if active && !rtcAudioSession.isActive {
+            try rtcAudioSession.setConfiguration(configuration, active: true)
+            didActivateAudioSession = true
+        } else {
+            try rtcAudioSession.setConfiguration(configuration)
+        }
+    }
+
+    private func overrideOutputAudioPortLocked(_ portOverride: AVAudioSession.PortOverride) throws {
+        rtcAudioSession.lockForConfiguration()
+        defer {
+            rtcAudioSession.unlockForConfiguration()
+        }
+
+        try rtcAudioSession.overrideOutputAudioPort(portOverride)
+    }
+
+    private func setPreferredInputLocked(_ input: AVAudioSessionPortDescription?) throws {
+        rtcAudioSession.lockForConfiguration()
+        defer {
+            rtcAudioSession.unlockForConfiguration()
+        }
+
+        if let input {
+            try rtcAudioSession.setPreferredInput(input)
+        } else {
+            try session.setPreferredInput(nil)
+        }
+    }
+
+    static func audioSessionMode(voiceProcessing: Bool) -> AVAudioSession.Mode {
+        voiceProcessing ? .voiceChat : .default
+    }
+
+    private static func categoryOptions(for route: OutputRoute) -> AVAudioSession.CategoryOptions {
         var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP]
-        if route != .receiver {
+        if shouldDefaultToSpeaker(for: route) {
             options.insert(.defaultToSpeaker)
         }
         return options
@@ -1260,9 +1321,76 @@ private enum NativeWebRTCSharedConstants {
         session.preferredInput?.uid ?? session.currentRoute.inputs.first?.uid ?? preferredInputId
     }
 
+    @objc private func handleAudioRouteChange(_ notification: Notification) {
+        dispatchOnQueue { [weak self] in
+            guard let self, self.activeConnectionId != nil, self.state != .idle else {
+                return
+            }
+
+            let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            let reason = reasonValue.flatMap { AVAudioSession.RouteChangeReason(rawValue: $0) }
+            self.log(
+                "audio route changed reason=\(self.audioRouteChangeReasonName(reason)) selectedOutputRoute=\(self.selectedOutputRoute.rawValue) diagnostics=\(self.audioSessionDiagnosticsLocked())"
+            )
+
+            if let activeConnectOptions = self.activeConnectOptions,
+               self.shouldReapplyAudioRouteLocked(reason: reason, voiceProcessing: activeConnectOptions.media.voiceProcessing) {
+                do {
+                    try self.applyOutputRouteLocked(self.selectedOutputRoute)
+                } catch let error as NativeWebRTCControllerError {
+                    self.emitErrorLocked(
+                        code: error.code,
+                        message: error.message,
+                        recoverable: true,
+                        nativeCode: error.nativeCode,
+                        connectionId: self.activeConnectionId
+                    )
+                } catch {
+                    self.emitErrorLocked(
+                        code: .internalError,
+                        message: "Failed to reapply audio route after route change.",
+                        recoverable: true,
+                        nativeCode: "\((error as NSError).code)",
+                        connectionId: self.activeConnectionId
+                    )
+                }
+
+                self.log(
+                    "audio route reapplied voiceProcessing=\(activeConnectOptions.media.voiceProcessing) selectedOutputRoute=\(self.selectedOutputRoute.rawValue) diagnostics=\(self.audioSessionDiagnosticsLocked())"
+                )
+            }
+
+            self.emitRouteChangedLocked(reason: "system_route_change")
+        }
+    }
+
+    private func shouldReapplyAudioRouteLocked(
+        reason: AVAudioSession.RouteChangeReason?,
+        voiceProcessing: Bool
+    ) -> Bool {
+        if !isWebRTCAudioSessionConfigurationCurrentLocked(voiceProcessing: voiceProcessing) {
+            return true
+        }
+
+        switch reason {
+        case .newDeviceAvailable, .oldDeviceUnavailable, .routeConfigurationChange, .noSuitableRouteForCategory:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func isWebRTCAudioSessionConfigurationCurrentLocked(voiceProcessing: Bool) -> Bool {
+        session.category == .playAndRecord &&
+            session.mode == Self.audioSessionMode(voiceProcessing: voiceProcessing) &&
+            session.categoryOptions == Self.categoryOptions(for: selectedOutputRoute)
+    }
+
     private func emitRouteChangedLocked(reason: String) {
         var payload: [String: Any] = [
-            "reason": reason
+            "reason": reason,
+            "selectedOutputRoute": selectedOutputRoute.rawValue,
+            "audioSession": audioSessionDiagnosticsLocked()
         ]
 
         if let activeConnectionId {
@@ -1274,6 +1402,60 @@ private enum NativeWebRTCSharedConstants {
         }
 
         emitEventLocked(name: "micRouteChanged", payload: payload)
+    }
+
+    private func audioSessionDiagnosticsLocked() -> [String: Any] {
+        [
+            "category": session.category.rawValue,
+            "mode": session.mode.rawValue,
+            "categoryOptions": session.categoryOptions.rawValue,
+            "sampleRate": session.sampleRate,
+            "preferredSampleRate": session.preferredSampleRate,
+            "ioBufferDuration": session.ioBufferDuration,
+            "preferredIOBufferDuration": session.preferredIOBufferDuration,
+            "inputLatency": session.inputLatency,
+            "outputLatency": session.outputLatency,
+            "outputVolume": session.outputVolume,
+            "currentRoute": [
+                "inputs": audioPortDiagnostics(session.currentRoute.inputs),
+                "outputs": audioPortDiagnostics(session.currentRoute.outputs)
+            ]
+        ]
+    }
+
+    private func audioPortDiagnostics(_ ports: [AVAudioSessionPortDescription]) -> [[String: Any]] {
+        ports.map { port in
+            [
+                "uid": port.uid,
+                "name": port.portName,
+                "type": port.portType.rawValue
+            ]
+        }
+    }
+
+    private func audioRouteChangeReasonName(_ reason: AVAudioSession.RouteChangeReason?) -> String {
+        guard let reason else {
+            return "unknown"
+        }
+
+        switch reason {
+        case .newDeviceAvailable:
+            return "new_device_available"
+        case .oldDeviceUnavailable:
+            return "old_device_unavailable"
+        case .categoryChange:
+            return "category_change"
+        case .override:
+            return "override"
+        case .wakeFromSleep:
+            return "wake_from_sleep"
+        case .noSuitableRouteForCategory:
+            return "no_suitable_route_for_category"
+        case .routeConfigurationChange:
+            return "route_configuration_change"
+        default:
+            return "unknown"
+        }
     }
 
     private func applyRemoteAudioEnabledToRemoteTracksLocked() {
@@ -1355,11 +1537,23 @@ private enum NativeWebRTCSharedConstants {
 
     private func teardownAudioSessionLocked() {
         do {
-            try session.overrideOutputAudioPort(.none)
-            try session.setActive(false, options: [.notifyOthersOnDeactivation])
+            try overrideOutputAudioPortLocked(.none)
+            if didActivateAudioSession {
+                try rtcAudioSession.setActive(false)
+                didActivateAudioSession = false
+            }
 
             if let previousCategory, let previousMode {
-                try session.setCategory(previousCategory, mode: previousMode, options: previousCategoryOptions ?? [])
+                let configuration = RTCAudioSessionConfiguration()
+                configuration.category = previousCategory.rawValue
+                configuration.mode = previousMode.rawValue
+                configuration.categoryOptions = previousCategoryOptions ?? []
+
+                rtcAudioSession.lockForConfiguration()
+                defer {
+                    rtcAudioSession.unlockForConfiguration()
+                }
+                try rtcAudioSession.setConfiguration(configuration)
             }
         } catch {
             // best effort
@@ -1368,6 +1562,7 @@ private enum NativeWebRTCSharedConstants {
         previousCategory = nil
         previousMode = nil
         previousCategoryOptions = nil
+        didActivateAudioSession = false
     }
 
     private func closeFactoryLocked() {
@@ -1778,6 +1973,10 @@ final class NativeWebRTCController: NSObject {
 #endif
 
 extension NativeWebRTCController {
+    static func shouldDefaultToSpeaker(for route: OutputRoute) -> Bool {
+        route != .receiver
+    }
+
     static func canStartConnection(from state: NativeWebRTCState) -> Bool {
         state == .idle || state == .error
     }

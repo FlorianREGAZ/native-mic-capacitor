@@ -32,6 +32,12 @@ class NativeMicTests: XCTestCase {
         XCTAssertTrue(options.media.startMicEnabled)
     }
 
+    func testWebRTCDefaultRoutePolicyUsesSpeakerExceptForReceiver() {
+        XCTAssertTrue(NativeWebRTCController.shouldDefaultToSpeaker(for: .system))
+        XCTAssertTrue(NativeWebRTCController.shouldDefaultToSpeaker(for: .speaker))
+        XCTAssertFalse(NativeWebRTCController.shouldDefaultToSpeaker(for: .receiver))
+    }
+
     func testWebRTCParseConnectOptionsRequiresWebRTCRequest() {
         assertWebRTCInvalidArgument("webrtcRequest is required.") {
             _ = try NativeWebRTCController.parseConnectOptions([:])
