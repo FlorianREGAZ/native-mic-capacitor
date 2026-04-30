@@ -510,6 +510,7 @@ private enum NativeWebRTCSharedConstants {
         let config = RTCConfiguration()
         config.sdpSemantics = .unifiedPlan
         config.iceServers = activeConnectOptions?.iceServers.map { $0.toRTCIceServer() } ?? []
+        config.iceTransportPolicy = .relay
 
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
 
