@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
+import android.util.Log;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import java.io.IOException;
@@ -29,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -310,11 +312,13 @@ public final class NativeWebRTC {
     }
 
     private static final String DATA_CHANNEL_LABEL = "chat";
+    private static final String TAG = "NativeWebRTC";
     private static final int DEFAULT_TIMEOUT_MS = 15_000;
     private static final int DEFAULT_ICE_GATHERING_WAIT_MS = 2_000;
     private static final int DEFAULT_RECONNECT_MAX_ATTEMPTS = 3;
     private static final int DEFAULT_RECONNECT_BACKOFF_MS = 2_000;
     private static final int CANDIDATE_FLUSH_DELAY_MS = 200;
+    private static final int MAX_DEBUG_MESSAGE_LENGTH = 160;
 
     private final Context appContext;
     private final AudioManager audioManager;
@@ -706,7 +710,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.WEBRTC_UNAVAILABLE,
                 "Native WebRTC initialization failed.",
                 false,
-                String.valueOf(error.hashCode())
+                formatThrowableForNativeCode(error)
             );
         }
     }
@@ -825,7 +829,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.PC_CREATE_FAILED,
                 "Failed to create local audio track.",
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
     }
@@ -1015,7 +1019,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
                 "Failed to build offer request payload.",
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
 
@@ -1056,7 +1060,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
                 "WebRTC answer has invalid SDP type.",
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
 
@@ -1091,7 +1095,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
                 "Failed to create WebRTC offer.",
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
     }
@@ -1123,7 +1127,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
                 "Failed to set local WebRTC description.",
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
     }
@@ -1155,7 +1159,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.NEGOTIATION_FAILED,
                 "Failed to set remote WebRTC description.",
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
     }
@@ -1229,7 +1233,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.ICE_FAILED,
                 "Failed to serialize ICE candidates.",
                 true,
-                String.valueOf(exception.hashCode()),
+                formatThrowableForNativeCode(exception),
                 activeConnectionId
             );
             return;
@@ -1306,7 +1310,7 @@ public final class NativeWebRTC {
                 errorCode,
                 errorMessage,
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
     }
@@ -1549,7 +1553,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.INTERNAL,
                 "Failed to configure audio session.",
                 false,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
     }
@@ -1610,7 +1614,7 @@ public final class NativeWebRTC {
                 NativeWebRTCErrorCode.INTERNAL,
                 "Failed to set output route.",
                 true,
-                String.valueOf(exception.hashCode())
+                formatThrowableForNativeCode(exception)
             );
         }
     }
@@ -2193,7 +2197,18 @@ public final class NativeWebRTC {
     }
 
     private <T> T runBlocking(Callable<T> callable) throws NativeWebRTCControllerError {
-        Future<T> future = executor.submit(callable);
+        final Future<T> future;
+        try {
+            future = executor.submit(callable);
+        } catch (RejectedExecutionException rejectedExecutionException) {
+            throw new NativeWebRTCControllerError(
+                NativeWebRTCErrorCode.INTERNAL,
+                "WebRTC executor is unavailable.",
+                false,
+                formatThrowableForNativeCode(rejectedExecutionException)
+            );
+        }
+
         try {
             return future.get();
         } catch (InterruptedException interruptedException) {
@@ -2209,13 +2224,39 @@ public final class NativeWebRTC {
             if (cause instanceof NativeWebRTCControllerError) {
                 throw (NativeWebRTCControllerError) cause;
             }
+            if (cause != null) {
+                Log.e(TAG, "Unexpected WebRTC operation failure.", cause);
+            }
             throw new NativeWebRTCControllerError(
                 NativeWebRTCErrorCode.INTERNAL,
                 "Unexpected WebRTC operation failure.",
                 false,
-                cause != null ? String.valueOf(cause.hashCode()) : null
+                formatThrowableForNativeCode(cause)
             );
         }
+    }
+
+    private static String formatThrowableForNativeCode(Throwable error) {
+        if (error == null) {
+            return null;
+        }
+
+        String simpleName = error.getClass().getSimpleName();
+        String typeName = simpleName != null && !simpleName.isEmpty() ? simpleName : error.getClass().getName();
+        String message = error.getMessage();
+        StringBuilder builder = new StringBuilder(typeName).append("@").append(Integer.toHexString(System.identityHashCode(error)));
+
+        if (message != null) {
+            String normalizedMessage = message.replace('\n', ' ').replace('\r', ' ').trim();
+            if (!normalizedMessage.isEmpty()) {
+                if (normalizedMessage.length() > MAX_DEBUG_MESSAGE_LENGTH) {
+                    normalizedMessage = normalizedMessage.substring(0, MAX_DEBUG_MESSAGE_LENGTH);
+                }
+                builder.append(": ").append(normalizedMessage);
+            }
+        }
+
+        return builder.toString();
     }
 
     private void runBlockingVoid(ThrowingRunnable runnable) throws NativeWebRTCControllerError {

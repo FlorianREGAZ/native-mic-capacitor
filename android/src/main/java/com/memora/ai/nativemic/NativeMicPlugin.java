@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.provider.Settings;
+import android.util.Log;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -21,6 +22,9 @@ import org.json.JSONException;
 
 @CapacitorPlugin(name = "NativeMic", permissions = { @Permission(alias = "microphone", strings = { Manifest.permission.RECORD_AUDIO }) })
 public class NativeMicPlugin extends Plugin {
+
+    private static final String TAG = "NativeMicPlugin";
+    private static final int MAX_DEBUG_MESSAGE_LENGTH = 160;
 
     private NativeMic controller;
     private NativeWebRTC webRtcController;
@@ -301,7 +305,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, null);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, null);
+            rejectUnexpectedWebRTC(call, exception, null, "webrtcConnect");
         }
     }
 
@@ -329,7 +333,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcDisconnect");
         }
     }
 
@@ -342,7 +346,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, null);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, null);
+            rejectUnexpectedWebRTC(call, exception, null, "webrtcForceReset");
         }
     }
 
@@ -382,7 +386,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcSendDataMessage");
         }
     }
 
@@ -422,7 +426,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcSetMicEnabled");
         }
     }
 
@@ -462,7 +466,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcSetRemoteAudioEnabled");
         }
     }
 
@@ -490,7 +494,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcSetPreferredInput");
         }
     }
 
@@ -532,7 +536,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcSetOutputRoute");
         }
     }
 
@@ -558,7 +562,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcGetState");
         }
     }
 
@@ -583,7 +587,7 @@ public class NativeMicPlugin extends Plugin {
         } catch (NativeWebRTC.NativeWebRTCControllerError error) {
             rejectWebRTC(call, error, connectionId);
         } catch (Exception exception) {
-            rejectUnexpectedWebRTC(call, exception, connectionId);
+            rejectUnexpectedWebRTC(call, exception, connectionId, "webrtcGetDiagnostics");
         }
     }
 
@@ -655,7 +659,8 @@ public class NativeMicPlugin extends Plugin {
     }
 
     private void rejectUnexpected(PluginCall call, Exception error, String captureId) {
-        reject(call, NativeMic.NativeMicErrorCode.INTERNAL, "Unexpected native error.", false, captureId, String.valueOf(error.hashCode()));
+        Log.e(TAG, "Unexpected native error.", error);
+        reject(call, NativeMic.NativeMicErrorCode.INTERNAL, "Unexpected native error.", false, captureId, formatThrowableForNativeCode(error));
     }
 
     private void rejectWebRTC(PluginCall call, NativeWebRTC.NativeWebRTCControllerError error, String connectionId) {
@@ -689,16 +694,44 @@ public class NativeMicPlugin extends Plugin {
         call.reject(message, code.wireValue, null, payload);
     }
 
-    private void rejectUnexpectedWebRTC(PluginCall call, Exception error, String connectionId) {
+    private void rejectUnexpectedWebRTC(PluginCall call, Exception error, String connectionId, String operation) {
+        Log.e(
+            TAG,
+            "Unexpected native WebRTC error in " + operation + (connectionId != null ? " for connection " + connectionId : "."),
+            error
+        );
         rejectWebRTC(
             call,
             NativeWebRTC.NativeWebRTCErrorCode.INTERNAL,
             "Unexpected native WebRTC error.",
             false,
             connectionId,
-            String.valueOf(error.hashCode()),
+            formatThrowableForNativeCode(error),
             null
         );
+    }
+
+    private static String formatThrowableForNativeCode(Throwable error) {
+        if (error == null) {
+            return null;
+        }
+
+        String simpleName = error.getClass().getSimpleName();
+        String typeName = simpleName != null && !simpleName.isEmpty() ? simpleName : error.getClass().getName();
+        String message = error.getMessage();
+        StringBuilder builder = new StringBuilder(typeName).append("@").append(Integer.toHexString(System.identityHashCode(error)));
+
+        if (message != null) {
+            String normalizedMessage = message.replace('\n', ' ').replace('\r', ' ').trim();
+            if (!normalizedMessage.isEmpty()) {
+                if (normalizedMessage.length() > MAX_DEBUG_MESSAGE_LENGTH) {
+                    normalizedMessage = normalizedMessage.substring(0, MAX_DEBUG_MESSAGE_LENGTH);
+                }
+                builder.append(": ").append(normalizedMessage);
+            }
+        }
+
+        return builder.toString();
     }
 
     private void syncWebRtcVolumeControlStream() {
