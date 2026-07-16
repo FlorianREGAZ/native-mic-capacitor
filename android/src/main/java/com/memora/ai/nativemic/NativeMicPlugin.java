@@ -695,11 +695,13 @@ public class NativeMicPlugin extends Plugin {
     }
 
     private void rejectUnexpectedWebRTC(PluginCall call, Exception error, String connectionId, String operation) {
-        Log.e(
-            TAG,
-            "Unexpected native WebRTC error in " + operation + (connectionId != null ? " for connection " + connectionId : "."),
-            error
-        );
+        if (NativeWebRTC.diagnosticLoggingEnabled(BuildConfig.DEBUG)) {
+            Log.e(
+                TAG,
+                "Unexpected native WebRTC error in " + operation + (connectionId != null ? " for connection " + connectionId : "."),
+                error
+            );
+        }
         rejectWebRTC(
             call,
             NativeWebRTC.NativeWebRTCErrorCode.INTERNAL,

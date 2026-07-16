@@ -221,6 +221,20 @@ public class NativeWebRTCUnitTest {
     }
 
     @Test
+    public void diagnosticLoggingIsAvailableOnlyForDebugBuilds() {
+        assertTrue(NativeWebRTC.diagnosticLoggingEnabled(true));
+        assertFalse(NativeWebRTC.diagnosticLoggingEnabled(false));
+        assertEquals(
+            org.webrtc.Logging.Severity.LS_INFO,
+            NativeWebRTC.diagnosticLoggingSeverity(true)
+        );
+        assertEquals(
+            org.webrtc.Logging.Severity.LS_NONE,
+            NativeWebRTC.diagnosticLoggingSeverity(false)
+        );
+    }
+
+    @Test
     public void shouldResetBeforeConnectForStaleOrErrorState() {
         assertTrue(NativeWebRTC.shouldResetBeforeConnect(NativeWebRTC.NativeWebRTCState.ERROR, true));
         assertTrue(NativeWebRTC.shouldResetBeforeConnect(NativeWebRTC.NativeWebRTCState.IDLE, true));

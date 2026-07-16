@@ -183,6 +183,17 @@ class NativeMicTests: XCTestCase {
         XCTAssertFalse(NativeWebRTCController.canStartConnection(from: .connected))
     }
 
+    func testWebRTCDiagnosticLoggingIsAvailableOnlyForDebugBuilds() {
+        XCTAssertEqual(
+            nativeWebRTCDiagnosticLoggingSeverity(isDebugBuild: true),
+            .info
+        )
+        XCTAssertEqual(
+            nativeWebRTCDiagnosticLoggingSeverity(isDebugBuild: false),
+            .none
+        )
+    }
+
     func testWebRTCShouldResetBeforeConnectForStaleOrErrorState() {
         XCTAssertTrue(
             NativeWebRTCController.shouldResetBeforeConnect(

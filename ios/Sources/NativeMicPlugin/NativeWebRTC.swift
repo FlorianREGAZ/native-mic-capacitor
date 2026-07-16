@@ -134,6 +134,10 @@ private enum NativeWebRTCSharedConstants {
     static let candidateFlushDelayMs = 200
 }
 
+func nativeWebRTCDiagnosticLoggingSeverity(isDebugBuild: Bool) -> RTCLoggingSeverity {
+    isDebugBuild ? .info : .none
+}
+
 #if os(iOS)
 @objc public final class NativeWebRTCController: NSObject {
     typealias EventEmitter = (_ eventName: String, _ payload: [String: Any]) -> Void
@@ -184,6 +188,11 @@ private enum NativeWebRTCSharedConstants {
         super.init()
 
         queue.setSpecific(key: queueKey, value: 1)
+        RTCSetMinDebugLogLevel(
+            nativeWebRTCDiagnosticLoggingSeverity(
+                isDebugBuild: _isDebugAssertConfiguration()
+            )
+        )
         RTCInitializeSSL()
         NotificationCenter.default.addObserver(
             self,
@@ -194,7 +203,9 @@ private enum NativeWebRTCSharedConstants {
     }
 
     private func log(_ message: String) {
+        #if DEBUG
         NSLog("[NativeWebRTC] %@", message)
+        #endif
     }
 
     deinit {

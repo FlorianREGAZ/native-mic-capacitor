@@ -44,6 +44,7 @@ import org.webrtc.DataChannel;
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.IceCandidate;
+import org.webrtc.Logging;
 import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStreamTrack;
 import org.webrtc.PeerConnection;
@@ -382,12 +383,25 @@ public final class NativeWebRTC {
         };
 
         try {
+            configureDiagnosticLogging();
             PeerConnectionFactory.initialize(
                 PeerConnectionFactory.InitializationOptions.builder(this.appContext).createInitializationOptions()
             );
         } catch (Throwable error) {
             // Handled lazily in ensureWebRTCFactory.
         }
+    }
+
+    private static void configureDiagnosticLogging() {
+        Logging.enableLogToDebugOutput(diagnosticLoggingSeverity(BuildConfig.DEBUG));
+    }
+
+    static Logging.Severity diagnosticLoggingSeverity(boolean debugBuild) {
+        return diagnosticLoggingEnabled(debugBuild) ? Logging.Severity.LS_INFO : Logging.Severity.LS_NONE;
+    }
+
+    static boolean diagnosticLoggingEnabled(boolean debugBuild) {
+        return debugBuild;
     }
 
     static boolean canStartConnection(NativeWebRTCState state) {
@@ -2224,7 +2238,7 @@ public final class NativeWebRTC {
             if (cause instanceof NativeWebRTCControllerError) {
                 throw (NativeWebRTCControllerError) cause;
             }
-            if (cause != null) {
+            if (cause != null && diagnosticLoggingEnabled(BuildConfig.DEBUG)) {
                 Log.e(TAG, "Unexpected WebRTC operation failure.", cause);
             }
             throw new NativeWebRTCControllerError(
